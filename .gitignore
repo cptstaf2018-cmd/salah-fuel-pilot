@@ -1,0 +1,11 @@
+node_modules
+.next
+.env
+.env.local
+coverage
+dist
+*.log
+.vercel
+
+.vercel
+.env*

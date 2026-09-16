@@ -1,0 +1,457 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  GOVERNORATE_ADMIN
+  OPERATIONS_MANAGER
+  DISTRIBUTION_ADMIN
+  STATION_MANAGER
+  STATION_EMPLOYEE
+  TANKER_OPERATOR
+  CITIZEN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+}
+
+enum StationStatus {
+  NORMAL
+  CROWDED
+  LOW_STOCK
+  OUT_OF_STOCK
+  STOPPED
+  CLOSED
+}
+
+enum InventoryTransactionType {
+  TANKER_RECEIPT
+  DISPENSING
+  MANUAL_ADJUSTMENT
+  CORRECTION
+}
+
+enum VehicleType {
+  PRIVATE_CAR
+  TAXI
+  BUS
+  TRUCK
+  MOTORCYCLE
+  GOVERNMENT
+  OTHER
+}
+
+enum VehicleRegistrationStatus {
+  PENDING_ALLOCATION
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum CrisisRuleStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  EXPIRED
+  CANCELLED
+}
+
+enum AllocationStatus {
+  PENDING
+  ASSIGNED
+  CANCELLED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  READY
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String?    @unique
+  phone        String?    @unique
+  name         String
+  passwordHash String     @map("password_hash")
+  role         UserRole
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?  @map("last_login_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  sessions  Session[]
+  auditLogs AuditLog[] @relation("AuditActor")
+  stationUsers StationUser[]
+  inventoryTransactions InventoryTransaction[]
+  vehicleOwner VehicleOwner?
+  crisisRulesCreated CrisisRule[] @relation("CrisisRuleCreator")
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Governorate {
+  id        String   @id @default(uuid()) @db.Uuid
+  nameAr    String   @map("name_ar")
+  nameEn    String   @map("name_en")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  districts District[]
+  stations  Station[]
+
+  @@map("governorates")
+}
+
+model District {
+  id            String   @id @default(uuid()) @db.Uuid
+  governorateId String   @map("governorate_id") @db.Uuid
+  nameAr        String   @map("name_ar")
+  nameEn        String?  @map("name_en")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  governorate Governorate @relation(fields: [governorateId], references: [id], onDelete: Restrict)
+  stations    Station[]
+
+  @@index([governorateId])
+  @@map("districts")
+}
+
+model Station {
+  id            String        @id @default(uuid()) @db.Uuid
+  governorateId String        @map("governorate_id") @db.Uuid
+  districtId    String?       @map("district_id") @db.Uuid
+  code          String        @unique
+  nameAr        String        @map("name_ar")
+  nameEn        String?       @map("name_en")
+  status        StationStatus @default(CLOSED)
+  latitude      Decimal?      @db.Decimal(9, 6)
+  longitude     Decimal?      @db.Decimal(9, 6)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  governorate Governorate @relation(fields: [governorateId], references: [id], onDelete: Restrict)
+  district    District?   @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  stationUsers StationUser[]
+  fuelInventory FuelInventory[]
+  inventoryTransactions InventoryTransaction[]
+  crisisRuleStations CrisisRuleStation[]
+  timeSlots TimeSlot[]
+  allocations Allocation[]
+  appointments Appointment[]
+
+  @@index([governorateId])
+  @@index([districtId])
+  @@index([status])
+  @@map("stations")
+}
+
+model StationUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  stationId String   @map("station_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([stationId, userId])
+  @@index([userId])
+  @@map("station_users")
+}
+
+model FuelType {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  nameAr    String   @map("name_ar")
+  nameEn    String?  @map("name_en")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  inventory FuelInventory[]
+  inventoryTransactions InventoryTransaction[]
+  vehicles Vehicle[]
+  crisisRules CrisisRule[]
+  timeSlots TimeSlot[]
+  appointments Appointment[]
+
+  @@index([isActive])
+  @@map("fuel_types")
+}
+
+model FuelInventory {
+  id        String   @id @default(uuid()) @db.Uuid
+  stationId String   @map("station_id") @db.Uuid
+  fuelTypeId String  @map("fuel_type_id") @db.Uuid
+  quantityLiters Decimal @default(0) @map("quantity_liters") @db.Decimal(14, 3)
+  minimumThresholdLiters Decimal @default(0) @map("minimum_threshold_liters") @db.Decimal(14, 3)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  station Station @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  fuelType FuelType @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
+  transactions InventoryTransaction[]
+
+  @@unique([stationId, fuelTypeId])
+  @@index([stationId])
+  @@index([fuelTypeId])
+  @@map("fuel_inventory")
+}
+
+model InventoryTransaction {
+  id             String                   @id @default(uuid()) @db.Uuid
+  stationId      String                   @map("station_id") @db.Uuid
+  fuelTypeId     String                   @map("fuel_type_id") @db.Uuid
+  inventoryId    String                   @map("inventory_id") @db.Uuid
+  type           InventoryTransactionType
+  quantityBefore Decimal                  @map("quantity_before") @db.Decimal(14, 3)
+  quantityChange Decimal                  @map("quantity_change") @db.Decimal(14, 3)
+  quantityAfter  Decimal                  @map("quantity_after") @db.Decimal(14, 3)
+  actorUserId    String                   @map("actor_user_id") @db.Uuid
+  reason         String?
+  referenceType  String?                  @map("reference_type")
+  referenceId    String?                  @map("reference_id")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+
+  station   Station       @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  fuelType  FuelType      @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
+  inventory FuelInventory @relation(fields: [inventoryId], references: [id], onDelete: Restrict)
+  actor     User          @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([stationId, fuelTypeId])
+  @@index([inventoryId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("inventory_transactions")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  outcome      String
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model VehicleOwner {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @unique @map("user_id") @db.Uuid
+  fullName  String   @map("full_name")
+  phone     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  vehicles Vehicle[]
+
+  @@index([phone])
+  @@map("vehicle_owners")
+}
+
+model Vehicle {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  ownerId            String                    @map("owner_id") @db.Uuid
+  fuelTypeId         String                    @map("fuel_type_id") @db.Uuid
+  plateNumber        String                    @map("plate_number")
+  plateGovernorate   String?                   @map("plate_governorate")
+  plateCategory      String?                   @map("plate_category")
+  plateMetadata      Json?                     @map("plate_metadata")
+  vehicleType        VehicleType               @map("vehicle_type")
+  registrationStatus VehicleRegistrationStatus @default(PENDING_ALLOCATION) @map("registration_status")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  owner    VehicleOwner    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  fuelType FuelType        @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
+  qrTokens VehicleQrToken[]
+  allocations Allocation[]
+  appointments Appointment[]
+
+  @@unique([plateNumber, plateGovernorate, plateCategory])
+  @@index([ownerId])
+  @@index([fuelTypeId])
+  @@index([registrationStatus])
+  @@map("vehicles")
+}
+
+model VehicleQrToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  vehicleId String    @map("vehicle_id") @db.Uuid
+  publicId  String    @unique @map("public_id")
+  tokenHash String    @unique @map("token_hash")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@map("vehicle_qr_tokens")
+}
+
+model CrisisRule {
+  id                        String           @id @default(uuid()) @db.Uuid
+  fuelTypeId                String           @map("fuel_type_id") @db.Uuid
+  createdByUserId           String           @map("created_by_user_id") @db.Uuid
+  status                    CrisisRuleStatus @default(DRAFT)
+  name                      String
+  quotaLiters               Decimal          @map("quota_liters") @db.Decimal(10, 3)
+  cooldownHours             Int              @map("cooldown_hours")
+  vehiclesPerStationPerHour Int              @map("vehicles_per_station_per_hour")
+  includedVehicleTypes      VehicleType[]    @map("included_vehicle_types")
+  eligibilityRules          Json?            @map("eligibility_rules")
+  startsAt                  DateTime         @map("starts_at")
+  endsAt                    DateTime         @map("ends_at")
+  createdAt                 DateTime         @default(now()) @map("created_at")
+  updatedAt                 DateTime         @updatedAt @map("updated_at")
+
+  fuelType     FuelType            @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
+  createdBy    User                @relation("CrisisRuleCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  stations     CrisisRuleStation[]
+  timeSlots    TimeSlot[]
+  allocations  Allocation[]
+  appointments Appointment[]
+
+  @@index([fuelTypeId])
+  @@index([status])
+  @@index([startsAt, endsAt])
+  @@map("crisis_rules")
+}
+
+model CrisisRuleStation {
+  id           String   @id @default(uuid()) @db.Uuid
+  crisisRuleId String   @map("crisis_rule_id") @db.Uuid
+  stationId    String   @map("station_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  crisisRule CrisisRule @relation(fields: [crisisRuleId], references: [id], onDelete: Cascade)
+  station    Station    @relation(fields: [stationId], references: [id], onDelete: Restrict)
+
+  @@unique([crisisRuleId, stationId])
+  @@index([stationId])
+  @@map("crisis_rule_stations")
+}
+
+model TimeSlot {
+  id           String   @id @default(uuid()) @db.Uuid
+  crisisRuleId String   @map("crisis_rule_id") @db.Uuid
+  stationId    String   @map("station_id") @db.Uuid
+  fuelTypeId   String   @map("fuel_type_id") @db.Uuid
+  startsAt     DateTime @map("starts_at")
+  endsAt       DateTime @map("ends_at")
+  capacity     Int
+  bookedCount  Int      @default(0) @map("booked_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  crisisRule  CrisisRule   @relation(fields: [crisisRuleId], references: [id], onDelete: Cascade)
+  station     Station      @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  fuelType    FuelType     @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
+  allocations Allocation[]
+  appointments Appointment[]
+
+  @@unique([stationId, fuelTypeId, startsAt, endsAt])
+  @@index([crisisRuleId])
+  @@index([stationId, startsAt])
+  @@index([bookedCount])
+  @@map("time_slots")
+}
+
+model Allocation {
+  id           String           @id @default(uuid()) @db.Uuid
+  crisisRuleId String           @map("crisis_rule_id") @db.Uuid
+  vehicleId    String           @map("vehicle_id") @db.Uuid
+  stationId    String           @map("station_id") @db.Uuid
+  timeSlotId   String           @map("time_slot_id") @db.Uuid
+  status       AllocationStatus @default(ASSIGNED)
+  reason       String?
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  crisisRule CrisisRule @relation(fields: [crisisRuleId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  station    Station    @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  timeSlot   TimeSlot   @relation(fields: [timeSlotId], references: [id], onDelete: Restrict)
+
+  @@unique([crisisRuleId, vehicleId])
+  @@index([stationId])
+  @@index([timeSlotId])
+  @@index([status])
+  @@map("allocations")
+}
+
+model Appointment {
+  id           String            @id @default(uuid()) @db.Uuid
+  crisisRuleId String            @map("crisis_rule_id") @db.Uuid
+  vehicleId    String            @map("vehicle_id") @db.Uuid
+  stationId    String            @map("station_id") @db.Uuid
+  fuelTypeId   String            @map("fuel_type_id") @db.Uuid
+  timeSlotId   String            @map("time_slot_id") @db.Uuid
+  status       AppointmentStatus @default(SCHEDULED)
+  quotaLiters  Decimal           @map("quota_liters") @db.Decimal(10, 3)
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  crisisRule CrisisRule @relation(fields: [crisisRuleId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  station    Station    @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  fuelType   FuelType   @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
+  timeSlot   TimeSlot   @relation(fields: [timeSlotId], references: [id], onDelete: Restrict)
+
+  @@unique([crisisRuleId, vehicleId])
+  @@index([stationId, status])
+  @@index([timeSlotId])
+  @@index([status])
+  @@map("appointments")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
