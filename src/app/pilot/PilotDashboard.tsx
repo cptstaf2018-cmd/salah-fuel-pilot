@@ -279,7 +279,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
               </article>
             ))}
           </section>
-          <section id="transactions" className="panel">
+          {role === "station" && <section id="transactions" className="panel">
             <h2>إضافة وقود مستلم</h2>
             <p>يسجل النظام صاحب الإضافة والكمية قبل وبعد الاستلام.</p>
             <form className="citizen-form" onSubmit={receive}>
@@ -329,7 +329,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
                 {busy ? "جاري الحفظ…" : "إضافة الكمية"}
               </button>
             </form>
-          </section>
+          </section>}
           {role === "station" && (
             <section className="panel">
               <h2>إضافة مواطن ومركبته</h2>
@@ -528,8 +528,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
                 {data.logs.slice(0, 10).map((log) => (
                   <p key={log.id}>
                     {new Date(log.createdAt).toLocaleString("ar-IQ")} ·{" "}
-                    {log.actor?.name || "تسجيل مواطن"} · {log.action} ·{" "}
-                    {log.outcome}
+                    {log.actor?.name || "تسجيل مواطن"} · {log.action === "AUTH_LOGIN_SUCCEEDED" ? "دخول ناجح" : log.action === "PILOT_FUEL_RECEIVED" ? "استلام وقود" : log.action === "ALLOCATION_CREATED" ? "تخصيص حصة" : "إجراء إداري"} · {log.outcome === "SUCCESS" ? "ناجح" : "مرفوض"}
                   </p>
                 ))}
               </section>
