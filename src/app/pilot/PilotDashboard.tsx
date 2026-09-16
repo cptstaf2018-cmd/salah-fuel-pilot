@@ -344,7 +344,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.transactions.map((item) => (
+                  {data.transactions.slice(0, 10).map((item) => (
                     <tr key={item.id}>
                       <td>
                         {new Date(item.createdAt).toLocaleString("ar-IQ")}
@@ -506,7 +506,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
               </section>
               <section id="reports" className="panel">
                 <h2>سجل الرقابة · آخر 30 إجراء</h2>
-                {data.logs.map((log) => (
+                {data.logs.slice(0, 10).map((log) => (
                   <p key={log.id}>
                     {new Date(log.createdAt).toLocaleString("ar-IQ")} ·{" "}
                     {log.actor?.name || "تسجيل مواطن"} · {log.action} ·{" "}

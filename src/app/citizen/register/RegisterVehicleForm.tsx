@@ -181,7 +181,7 @@ export function RegisterVehicleForm() {
               </div>
             </dl>
             {result.appointment ? <div className="citizen-allocation-message" role="status"><strong>تم تخصيص حصتك</strong><p>{result.appointment.quotaLiters} لتر {result.appointment.fuelName}</p><p>المحطة: {result.appointment.stationName}</p><p>الموعد: {new Date(result.appointment.startsAt).toLocaleString("ar-IQ")} إلى {new Date(result.appointment.endsAt).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" })}</p></div> : <p className="allocation-pending">بانتظار تخصيص المحطة والموعد من الإدارة. ستتحدث الصفحة تلقائياً.</p>}
-            {!documents && <form className="document-upload" onSubmit={uploadDocuments}><strong>رفع البطاقة الوطنية</strong><label>الوجه الأمامي<input name="front" type="file" accept="image/*" required /></label><label>الوجه الخلفي<input name="back" type="file" accept="image/*" required /></label><button className="primary-action" disabled={loading}>رفع للمراجعة</button></form>}
+            {!documents && <form className="document-upload" onSubmit={uploadDocuments}><div className="document-upload-title"><strong>توثيق البطاقة الوطنية</strong><span>مطلوب رفع الوجهين للتحقق من محافظة صلاح الدين</span></div><div className="document-upload-fields"><label><span>الوجه الأمامي</span><input name="front" type="file" accept="image/*" required /><small>صورة واضحة للجهة الأمامية</small></label><label><span>الوجه الخلفي</span><input name="back" type="file" accept="image/*" required /><small>صورة واضحة للجهة الخلفية</small></label></div><button className="primary-action" disabled={loading}>{loading ? "جاري الرفع…" : "رفع البطاقة للمراجعة"}</button></form>}
           </>
         ) : (
           <>

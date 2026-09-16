@@ -573,6 +573,15 @@ nav {
 .citizen-allocation-message strong { display: block; margin-bottom: 6px; font-size: 1.1rem; }
 .citizen-allocation-message p { margin: 2px 0; color: #185b36; }
 .allocation-pending { padding: 14px; border-radius: 8px; background: #fff7e5; color: #785b20; }
+.document-upload { display: grid; gap: 14px; margin-top: 4px; padding: 16px; border: 1px solid #dce6f0; border-radius: 12px; background: #f7fafc; }
+.document-upload-title { display: grid; gap: 4px; }
+.document-upload-title strong { color: #173b2b; font-size: 1.05rem; }
+.document-upload-title span { color: #6a7888; font-size: .8rem; }
+.document-upload-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.document-upload label { display: grid; gap: 7px; padding: 12px; border: 1px dashed #b9c9d8; border-radius: 8px; background: #fff; color: #34495e; font-weight: 800; }
+.document-upload input[type="file"] { width: 100%; min-height: 38px; padding: 7px; border: 1px solid #d7e0e8; border-radius: 6px; background: #f9fbfd; font: inherit; font-size: .76rem; }
+.document-upload small { color: #8391a0; font-weight: 500; }
+@media (max-width: 600px) { .document-upload-fields { grid-template-columns: 1fr; } }
 
 @media (max-width: 720px) {
   .public-page {
