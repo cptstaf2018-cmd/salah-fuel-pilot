@@ -7,6 +7,14 @@ export async function POST(request: NextRequest) {
   const front = form.get("front") as File | null;
   const back = form.get("back") as File | null;
   if (!vehicleId || !front || !back || front.size === 0 || back.size === 0) return NextResponse.json({ error: "الصورتان الأمامية والخلفية مطلوبة." }, { status: 400 });
+  const validImage = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png"].includes(file.type)) return false;
+    const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+    const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+    return jpeg || png;
+  };
+  if (!(await validImage(front)) || !(await validImage(back))) return NextResponse.json({ error: "ارفع صور JPG أو PNG واضحة للبطاقة الوطنية فقط، بحجم أقل من 5MB." }, { status: 400 });
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return NextResponse.json({ error: "إعدادات التخزين غير مكتملة." }, { status: 500 });
