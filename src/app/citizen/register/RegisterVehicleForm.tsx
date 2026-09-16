@@ -98,7 +98,7 @@ export function RegisterVehicleForm() {
 
   return (
     <div className="registration-grid">
-      <form className="citizen-form" onSubmit={onSubmit}>
+      {!result && <form className="citizen-form" onSubmit={onSubmit}>
         <label>
           اسم صاحب المركبة
           <input name="ownerFullName" required minLength={2} maxLength={120} autoComplete="name" />
@@ -151,7 +151,7 @@ export function RegisterVehicleForm() {
           <p className="form-note">لا توجد أنواع وقود معرفة بعد. شغل seed التطوير أو أضف نوع وقود من لوحة الإدارة.</p>
         ) : null}
         {error ? <p className="form-error">{error}</p> : null}
-      </form>
+      </form>}
 
       <aside className="qr-result">
         {result ? (

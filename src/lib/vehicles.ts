@@ -33,6 +33,17 @@ export async function registerVehicle(input: RegisterVehicleInput) {
       }
     });
 
+    const existingVehicle = await tx.vehicle.findFirst({
+      where: {
+        plateNumber: input.plateNumber,
+        ...(input.plateGovernorate ? { plateGovernorate: input.plateGovernorate } : {})
+      },
+      include: { qrTokens: { where: { revokedAt: null }, orderBy: { createdAt: "desc" }, take: 1 } }
+    });
+    if (existingVehicle) {
+      throw new Error("هذه المركبة مسجلة مسبقاً. استخدم رمز QR الموجود لديك.");
+    }
+
     const vehicle = await tx.vehicle.create({
       data: {
         ownerId: owner.id,
