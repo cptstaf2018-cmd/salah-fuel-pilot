@@ -210,6 +210,16 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       <p className="pilot-notice">
         تُعرض الكميات والحصص وفق سجلات الاستلام الفعلية، ويُحدّث التخصيص تلقائيًا بعد تسجيل الكمية.
       </p>
+      {role === "admin" && data && <section className="panel" aria-label="التحكم بالتخصيص">
+        <div className="pilot-section-head">
+          <div><h2>التحكم بالتخصيص والأزمة</h2><p>من هنا يفعّل السوبر أدمن الأزمة ويشغّل توزيع الحصص للمركبات المنتظرة.</p></div>
+          <span className="badge">إدارة عليا</span>
+        </div>
+        <div className="form-row">
+          <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/crisis-rules/activate")}>تفعيل وضع الأزمة</button>
+          <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/allocations/auto")}>تخصيص الحصص تلقائيًا</button>
+        </div>
+      </section>}
       {data && <div className="dashboard-toolbar"><span className="live-dot" /> آخر تحديث تلقائي كل 5 ثوانٍ <button type="button" className="toolbar-action" onClick={() => void load()}>تحديث الآن</button></div>}
       {error && (
         <p role="alert" className="form-error">
@@ -373,14 +383,6 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
           </section>
           {role === "admin" && (
         <>
-          <section className="panel">
-            <h2>التحكم بالتخصيص</h2>
-            <p>فعّل قاعدة الأزمة ثم شغّل التخصيص التلقائي للمركبات التي تنتظر الحصة.</p>
-            <div className="form-row">
-              <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/crisis-rules/activate")}>تفعيل وضع الأزمة</button>
-              <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/allocations/auto")}>تخصيص الحصص تلقائيًا</button>
-            </div>
-          </section>
           <section className="panel pilot-filter-panel">
             <h2>بحث وتصفية المواطنين</h2>
             <p>ابحث بالاسم أو رقم اللوحة، ثم اختر نوع الوقود أو حالة التسجيل.</p>
