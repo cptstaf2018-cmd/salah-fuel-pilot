@@ -36,6 +36,7 @@ export function RegisterVehicleForm() {
   const [result, setResult] = useState<RegistrationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [documents, setDocuments] = useState(false);
 
   useEffect(() => {
     fetch("/api/public/fuel-types")
@@ -93,6 +94,16 @@ export function RegisterVehicleForm() {
 
     setResult(data);
     window.localStorage.setItem("pilot-registration-result", JSON.stringify(data));
+    setLoading(false);
+  }
+
+  async function uploadDocuments(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!result) return;
+    setLoading(true); setError(null);
+    const response = await fetch("/api/citizen/documents", { method: "POST", body: (() => { const data = new FormData(event.currentTarget); data.set("vehicleId", result.vehicle.id); return data; })() });
+    const data = await response.json();
+    if (!response.ok) setError(data.error || "تعذر رفع البطاقة."); else setDocuments(true);
     setLoading(false);
   }
 
@@ -170,6 +181,7 @@ export function RegisterVehicleForm() {
               </div>
             </dl>
             {result.appointment ? <div className="citizen-allocation-message" role="status"><strong>تم تخصيص حصتك</strong><p>{result.appointment.quotaLiters} لتر {result.appointment.fuelName}</p><p>المحطة: {result.appointment.stationName}</p><p>الموعد: {new Date(result.appointment.startsAt).toLocaleString("ar-IQ")} إلى {new Date(result.appointment.endsAt).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" })}</p></div> : <p className="allocation-pending">بانتظار تخصيص المحطة والموعد من الإدارة. ستتحدث الصفحة تلقائياً.</p>}
+            {!documents && <form className="document-upload" onSubmit={uploadDocuments}><strong>رفع البطاقة الوطنية</strong><label>الوجه الأمامي<input name="front" type="file" accept="image/*" required /></label><label>الوجه الخلفي<input name="back" type="file" accept="image/*" required /></label><button className="primary-action" disabled={loading}>رفع للمراجعة</button></form>}
           </>
         ) : (
           <>
