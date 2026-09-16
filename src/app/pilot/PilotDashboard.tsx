@@ -168,8 +168,8 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       )
     : 0;
   return (
-    <div className="dashboard-app">
-      <aside className="dashboard-sidebar">
+    <div className={`dashboard-app ${data ? "dashboard-authenticated" : "dashboard-login"}`}>
+      {data && <aside className="dashboard-sidebar">
         <div className="dashboard-brand"><span className="brand-symbol">⛽</span><div><strong>نظام توزيع الوقود</strong><small>صلاح الدين</small></div></div>
         <nav className="dashboard-nav" aria-label="التنقل الرئيسي">
           <a className="dashboard-nav-item active" href="#top">الرئيسية</a>
@@ -180,7 +180,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
           <a className="dashboard-nav-item" href="#alerts">الإشعارات</a>
         </nav>
         <div className="dashboard-user"><span className="avatar">{data?.user.name?.slice(0, 1) || "م"}</span><div><strong>{data?.user.name || "مستخدم النظام"}</strong><small>{role === "admin" ? "سوبر أدمن" : "صاحب محطة"}</small></div></div>
-      </aside>
+      </aside>}
     <main id="top" className="pilot-shell">
       <header className="pilot-header dashboard-topbar">
         <div>

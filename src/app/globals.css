@@ -41,6 +41,8 @@
 .pilot-filters input, .pilot-filters select { min-height: 46px; border: 1px solid var(--border); background: white; color: var(--ink); padding: 10px 12px; font: inherit; }
 .pilot-filters input:focus, .pilot-filters select:focus { outline: 2px solid rgba(184, 137, 45, 0.34); border-color: var(--gold); }
 .dashboard-app { min-height: 100vh; display: grid; grid-template-columns: 250px minmax(0, 1fr); background: #f4f7fb; }
+.dashboard-app.dashboard-login { display: block; }
+.dashboard-app.dashboard-login .pilot-shell { max-width: 760px; margin: 0 auto; }
 .dashboard-sidebar { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 28px; padding: 24px 16px; background: #fff; border-left: 1px solid #dbe3ec; }
 .dashboard-brand { display: flex; align-items: center; gap: 10px; padding: 8px; color: #17263b; }
 .dashboard-brand strong, .dashboard-brand small, .dashboard-user strong, .dashboard-user small { display: block; }
