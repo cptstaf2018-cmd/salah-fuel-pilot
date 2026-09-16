@@ -15,6 +15,12 @@ export async function POST(request: NextRequest) {
     return jpeg || png;
   };
   if (!(await validImage(front)) || !(await validImage(back))) return NextResponse.json({ error: "ارفع صور JPG أو PNG واضحة للبطاقة الوطنية فقط، بحجم أقل من 5MB." }, { status: 400 });
+  const ocrKey = process.env.OCR_SPACE_API_KEY;
+  if (ocrKey) {
+    const readCard = async (file: File) => { const body = new FormData(); body.append("file", file); body.append("apikey", ocrKey); body.append("language", "ara"); body.append("isOverlayRequired", "false"); const response = await fetch("https://api.ocr.space/parse/image", { method: "POST", body }); if (!response.ok) return ""; const data = await response.json() as { ParsedResults?: Array<{ ParsedText?: string }> }; return data.ParsedResults?.map((item) => item.ParsedText || "").join(" ") || ""; };
+    const text = `${await readCard(front)} ${await readCard(back)}`.replace(/\s+/g, "");
+    if (!text.includes("صلاحالدين") && !text.includes("صلاحالدین")) return NextResponse.json({ error: "لم نتعرف على بطاقة وطنية لمحافظة صلاح الدين. ارفع صورة واضحة للبطاقة." }, { status: 422 });
+  }
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return NextResponse.json({ error: "إعدادات التخزين غير مكتملة." }, { status: 500 });
