@@ -18,6 +18,7 @@ type RegistrationResult = {
     publicId: string;
     svg: string;
   };
+  appointment?: { stationName: string; fuelName: string; quotaLiters: string; startsAt: string; endsAt: string } | null;
 };
 
 const vehicleTypes = [
@@ -46,6 +47,19 @@ export function RegisterVehicleForm() {
       try { setResult(JSON.parse(saved) as RegistrationResult); } catch { window.localStorage.removeItem("pilot-registration-result"); }
     }
   }, []);
+
+  useEffect(() => {
+    if (!result?.vehicle.id) return;
+    const refresh = async () => {
+      const response = await fetch(`/api/citizen/vehicles?vehicleId=${encodeURIComponent(result.vehicle.id)}`);
+      if (!response.ok) return;
+      const data = await response.json() as { appointment: RegistrationResult["appointment"] };
+      if (data.appointment) setResult((current) => current ? { ...current, appointment: data.appointment } : current);
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 10000);
+    return () => clearInterval(timer);
+  }, [result?.vehicle.id]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -155,6 +169,7 @@ export function RegisterVehicleForm() {
                 <dd>بانتظار التخصيص</dd>
               </div>
             </dl>
+            {result.appointment ? <div className="citizen-allocation-message" role="status"><strong>تم تخصيص حصتك</strong><p>{result.appointment.quotaLiters} لتر {result.appointment.fuelName}</p><p>المحطة: {result.appointment.stationName}</p><p>الموعد: {new Date(result.appointment.startsAt).toLocaleString("ar-IQ")} إلى {new Date(result.appointment.endsAt).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" })}</p></div> : <p className="allocation-pending">بانتظار تخصيص المحطة والموعد من الإدارة. ستتحدث الصفحة تلقائياً.</p>}
           </>
         ) : (
           <>

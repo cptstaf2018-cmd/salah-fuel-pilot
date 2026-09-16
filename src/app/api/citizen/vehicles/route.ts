@@ -15,6 +15,13 @@ function normalizeVehicleInput(data: ReturnType<typeof registerVehicleSchema.par
 }
 
 export async function GET(request: NextRequest) {
+  const vehicleId = request.nextUrl.searchParams.get("vehicleId");
+  if (vehicleId) {
+    const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId }, include: { fuelType: true, appointments: { where: { status: "SCHEDULED" }, orderBy: { createdAt: "desc" }, take: 1, include: { station: true, timeSlot: true } } } });
+    if (!vehicle) return NextResponse.json({ error: "المركبة غير موجودة." }, { status: 404 });
+    const appointment = vehicle.appointments[0];
+    return NextResponse.json({ appointment: appointment ? { stationName: appointment.station.nameAr, fuelName: vehicle.fuelType.nameAr, quotaLiters: appointment.quotaLiters.toString(), startsAt: appointment.timeSlot.startsAt.toISOString(), endsAt: appointment.timeSlot.endsAt.toISOString() } : null });
+  }
   const user = await getAuthenticatedUser(request);
 
   if (!user || user.role !== "CITIZEN") {

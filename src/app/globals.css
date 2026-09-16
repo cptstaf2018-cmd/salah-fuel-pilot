@@ -569,6 +569,10 @@ nav {
   margin: 0;
   overflow-wrap: anywhere;
 }
+.citizen-allocation-message { padding: 16px; border: 1px solid #b9dfc8; border-radius: 10px; background: #effaf2; color: #185b36; line-height: 1.8; }
+.citizen-allocation-message strong { display: block; margin-bottom: 6px; font-size: 1.1rem; }
+.citizen-allocation-message p { margin: 2px 0; color: #185b36; }
+.allocation-pending { padding: 14px; border-radius: 8px; background: #fff7e5; color: #785b20; }
 
 @media (max-width: 720px) {
   .public-page {
