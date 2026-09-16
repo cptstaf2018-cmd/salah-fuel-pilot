@@ -157,6 +157,17 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       setBusy(false);
     }
   }
+  async function runAllocation(path: "/api/crisis-rules/activate" | "/api/allocations/auto") {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "x-dashboard-role": role }, body: "{}" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setMessage(path.includes("activate") ? "تم تفعيل وضع الأزمة." : `تم تخصيص ${result.allocated} مركبة تلقائيًا.`);
+      await load();
+    } catch (err) { setError(err instanceof Error ? err.message : "تعذر تنفيذ العملية."); }
+    finally { setBusy(false); }
+  }
   const station = data?.stations.find((item) => item.id === stationId);
   const pageStart = data?.vehiclesPage.total
     ? (data.vehiclesPage.page - 1) * data.vehiclesPage.pageSize + 1
@@ -184,12 +195,12 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
     <main id="top" className="pilot-shell">
       <header className="pilot-header dashboard-topbar">
         <div>
-          <p className="eyebrow">Baghdad Future AI · تجربة صلاح الدين</p>
+          <p className="eyebrow">Baghdad Future AI · منظومة صلاح الدين</p>
           <h1>{role === "admin" ? "لوحة السوبر أدمن" : "لوحة صاحب المحطة"}</h1>
           <p>
             {data
               ? `مرحبًا ${data.user.name} · تحديث كل 5 ثوانٍ`
-              : "سجّل الدخول لبدء التجربة"}
+              : "سجّل الدخول إلى لوحة التحكم"}
           </p>
         </div>
         <a className="inline-action" href="/">
@@ -197,8 +208,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
         </a>
       </header>
       <p className="pilot-notice">
-        بيئة تجريبية — استخدم بيانات مواطنين وهمية. الحصة الافتتاحية لكل محطة:
-        80,000 لتر بنزين و50,000 لتر كاز.
+        تُعرض الكميات والحصص وفق سجلات الاستلام الفعلية، ويُحدّث التخصيص تلقائيًا بعد تسجيل الكمية.
       </p>
       {data && <div className="dashboard-toolbar"><span className="live-dot" /> آخر تحديث تلقائي كل 5 ثوانٍ <button type="button" className="toolbar-action" onClick={() => void load()}>تحديث الآن</button></div>}
       {error && (
@@ -361,8 +371,16 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
               </table>
             </div>
           </section>
-      {role === "admin" && (
+          {role === "admin" && (
         <>
+          <section className="panel">
+            <h2>التحكم بالتخصيص</h2>
+            <p>فعّل قاعدة الأزمة ثم شغّل التخصيص التلقائي للمركبات التي تنتظر الحصة.</p>
+            <div className="form-row">
+              <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/crisis-rules/activate")}>تفعيل وضع الأزمة</button>
+              <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/allocations/auto")}>تخصيص الحصص تلقائيًا</button>
+            </div>
+          </section>
           <section className="panel pilot-filter-panel">
             <h2>بحث وتصفية المواطنين</h2>
             <p>ابحث بالاسم أو رقم اللوحة، ثم اختر نوع الوقود أو حالة التسجيل.</p>
@@ -377,8 +395,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
                   <div>
                     <h2>تقسيم السيارات على المحطات</h2>
                     <p>
-                      مثال: 50,000 سيارة لا تظهر كقائمة واحدة؛ تتوزع على المحطات
-                      وتظهر في الجدول كصفحات.
+                      تُعرض المركبات المسجلة موزعة حسب المحطة وحالة التخصيص.
                     </p>
                   </div>
                   <span className="badge">{number(planningCars)} سيارة</span>
