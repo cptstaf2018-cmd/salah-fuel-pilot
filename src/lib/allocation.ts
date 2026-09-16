@@ -215,6 +215,11 @@ export async function assignVehicleToCrisisRule(input: {
       }
     });
 
+    await tx.vehicle.update({
+      where: { id: vehicle.id },
+      data: { registrationStatus: "ACTIVE" }
+    });
+
     return { allocation, appointment };
   });
 
@@ -234,4 +239,46 @@ export async function assignVehicleToCrisisRule(input: {
   });
 
   return result;
+}
+
+/** Allocate waiting vehicles whenever a station reports newly received fuel. */
+export async function autoAllocatePendingVehicles(input: {
+  fuelTypeId: string;
+  actorUserId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}) {
+  const rules = await prisma.crisisRule.findMany({
+    where: { fuelTypeId: input.fuelTypeId, status: "ACTIVE", startsAt: { lte: new Date() }, endsAt: { gte: new Date() } },
+    orderBy: { createdAt: "asc" },
+    include: { stations: true }
+  });
+  let allocated = 0;
+
+  for (const rule of rules) {
+    const inventory = await prisma.fuelInventory.findMany({
+      where: { fuelTypeId: rule.fuelTypeId, stationId: { in: rule.stations.map((station) => station.stationId) } },
+      select: { quantityLiters: true }
+    });
+    let remainingLiters = inventory.reduce((sum, item) => sum + item.quantityLiters.toNumber(), 0);
+    const quotaLiters = rule.quotaLiters.toNumber();
+    if (quotaLiters <= 0 || remainingLiters < quotaLiters) continue;
+
+    const vehicles = await prisma.vehicle.findMany({
+      where: { fuelTypeId: rule.fuelTypeId, registrationStatus: "PENDING_ALLOCATION", vehicleType: { in: rule.includedVehicleTypes }, allocations: { none: { crisisRuleId: rule.id } } },
+      orderBy: { createdAt: "asc" },
+      take: 1000
+    });
+    for (const vehicle of vehicles) {
+      if (remainingLiters < quotaLiters) break;
+      try {
+        await assignVehicleToCrisisRule({ ...input, crisisRuleId: rule.id, vehicleId: vehicle.id });
+        allocated += 1;
+        remainingLiters -= quotaLiters;
+      } catch {
+        // Full slots or a concurrent assignment are expected; continue with the queue.
+      }
+    }
+  }
+  return { allocated };
 }

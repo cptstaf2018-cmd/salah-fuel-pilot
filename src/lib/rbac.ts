@@ -44,7 +44,7 @@ const rolePermissions: Record<Role, Permission[]> = {
   ],
   OPERATIONS_MANAGER: ["governorate:read", "stations:read", "inventory:read", "audit:read"],
   DISTRIBUTION_ADMIN: ["distribution:manage", "stations:read", "inventory:read", "inventory:adjust"],
-  STATION_MANAGER: ["stations:read", "inventory:read", "dispensing:verify", "dispensing:confirm"],
+  STATION_MANAGER: ["stations:read", "inventory:read", "inventory:adjust", "dispensing:verify", "dispensing:confirm"],
   STATION_EMPLOYEE: ["dispensing:verify", "dispensing:confirm"],
   TANKER_OPERATOR: ["tankers:update"],
   CITIZEN: ["citizen:self"]
