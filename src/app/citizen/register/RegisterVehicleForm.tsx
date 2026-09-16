@@ -69,6 +69,8 @@ export function RegisterVehicleForm() {
     setResult(null);
 
     const form = new FormData(event.currentTarget);
+    const front = form.get("front");
+    const back = form.get("back");
     const payload = {
       ownerFullName: String(form.get("ownerFullName") || ""),
       phone: String(form.get("phone") || ""),
@@ -94,6 +96,15 @@ export function RegisterVehicleForm() {
 
     setResult(data);
     window.localStorage.setItem("pilot-registration-result", JSON.stringify(data));
+    if (front instanceof File && back instanceof File && front.size > 0 && back.size > 0) {
+      const documents = new FormData();
+      documents.set("vehicleId", data.vehicle.id);
+      documents.set("front", front);
+      documents.set("back", back);
+      const upload = await fetch("/api/citizen/documents", { method: "POST", body: documents });
+      if (!upload.ok) { const uploadData = await upload.json(); setError(uploadData.error || "تعذر رفع البطاقة الوطنية."); }
+      else setDocuments(true);
+    }
     setLoading(false);
   }
 
@@ -155,6 +166,7 @@ export function RegisterVehicleForm() {
             </select>
           </label>
         </div>
+        <div className="document-inline"><strong>البطاقة الوطنية</strong><span>ارفع الوجهين داخل التسجيل — JPG أو PNG فقط، حد أقصى 5MB</span><div className="document-upload-fields"><label><span>الوجه الأمامي</span><input name="front" type="file" accept="image/jpeg,image/png" required /></label><label><span>الوجه الخلفي</span><input name="back" type="file" accept="image/jpeg,image/png" required /></label></div></div>
         <button className="primary-action" type="submit" disabled={loading || fuelTypes.length === 0}>
           {loading ? "جاري التسجيل..." : "تسجيل المركبة وإصدار QR"}
         </button>
@@ -181,7 +193,6 @@ export function RegisterVehicleForm() {
               </div>
             </dl>
             {result.appointment ? <div className="citizen-allocation-message" role="status"><strong>تم تخصيص حصتك</strong><p>{result.appointment.quotaLiters} لتر {result.appointment.fuelName}</p><p>المحطة: {result.appointment.stationName}</p><p>الموعد: {new Date(result.appointment.startsAt).toLocaleString("ar-IQ")} إلى {new Date(result.appointment.endsAt).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" })}</p></div> : <p className="allocation-pending">بانتظار تخصيص المحطة والموعد من الإدارة. ستتحدث الصفحة تلقائياً.</p>}
-            {!documents && <form className="document-upload" onSubmit={uploadDocuments}><div className="document-upload-title"><strong>توثيق البطاقة الوطنية</strong><span>مطلوب رفع الوجهين للتحقق من محافظة صلاح الدين · JPG أو PNG فقط · 5MB كحد أقصى</span></div><div className="document-upload-fields"><label><span>الوجه الأمامي</span><input name="front" type="file" accept="image/jpeg,image/png" required /><small>صورة واضحة للجهة الأمامية</small></label><label><span>الوجه الخلفي</span><input name="back" type="file" accept="image/jpeg,image/png" required /><small>صورة واضحة للجهة الخلفية</small></label></div><button className="primary-action" disabled={loading}>{loading ? "جاري الرفع…" : "رفع البطاقة للمراجعة"}</button></form>}
           </>
         ) : (
           <>
