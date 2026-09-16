@@ -21,6 +21,10 @@ export async function registerVehicle(input: RegisterVehicleInput) {
   const qr = createVehicleQrSecret();
 
   const result = await prisma.$transaction(async (tx) => {
+    const existingOwner = await tx.vehicleOwner.findUnique({ where: { phone: input.phone }, include: { vehicles: { take: 1 } } });
+    if (existingOwner?.vehicles.length) {
+      throw new Error("رقم الهاتف مسجل مسبقاً لمركبة. استخدم صفحة التعديل بدلاً من التسجيل الجديد.");
+    }
     const owner = await tx.vehicleOwner.upsert({
       where: { phone: input.phone },
       create: {
@@ -32,6 +36,7 @@ export async function registerVehicle(input: RegisterVehicleInput) {
         fullName: input.ownerFullName
       }
     });
+
 
     const existingVehicle = await tx.vehicle.findFirst({
       where: {
