@@ -75,11 +75,7 @@ html {
 body {
   margin: 0;
   color: var(--ink);
-  font-family:
-    "Segoe UI",
-    Tahoma,
-    Arial,
-    sans-serif;
+  font-family: var(--font-plex-arabic), "Segoe UI", Tahoma, Arial, sans-serif;
   letter-spacing: 0;
 }
 

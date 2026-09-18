@@ -1,0 +1,113 @@
+/**
+ * Design tokens for the Salah Al-Din fuel console.
+ *
+ * Direction: instrument panel. Control-room chrome (deep forest rail, gold
+ * command accents) wrapping light, high-contrast data surfaces — dark chrome
+ * for authority and depth, light data for a station owner reading a phone
+ * outdoors. Borders define regions; shadows are reserved for things that
+ * genuinely float above the page.
+ */
+
+:root {
+  /* ---- Ground and surfaces ---------------------------------------------- */
+  --ground: oklch(97.6% 0.004 150);
+  --surface: oklch(100% 0 0);
+  --surface-sunken: oklch(96.4% 0.006 150);
+  --surface-raised: oklch(100% 0 0);
+
+  /* Control-room chrome: the rail and any dark command bar. */
+  --chrome: oklch(24% 0.035 155);
+  --chrome-soft: oklch(30% 0.038 155);
+  --chrome-line: oklch(38% 0.035 155);
+  --chrome-ink: oklch(96% 0.01 150);
+  --chrome-ink-dim: oklch(72% 0.02 150);
+
+  /* ---- Ink -------------------------------------------------------------- */
+  --ink: oklch(21% 0.015 155);
+  --ink-soft: oklch(44% 0.014 155);
+  --ink-faint: oklch(58% 0.012 155);
+
+  /* ---- Lines ------------------------------------------------------------ */
+  --line: oklch(90% 0.008 150);
+  --line-strong: oklch(82% 0.012 150);
+
+  /* ---- Brand ------------------------------------------------------------ */
+  --brand: oklch(38% 0.09 155);
+  --brand-strong: oklch(31% 0.085 155);
+  --brand-wash: oklch(95% 0.02 155);
+  --gold: oklch(70% 0.12 80);
+  --gold-wash: oklch(96% 0.035 85);
+
+  /* ---- Semantic status --------------------------------------------------
+     Stock health and row state. Each has a solid tone for marks and bars,
+     and a wash for backgrounds, so a status reads at a glance and still
+     passes contrast when text sits on it. */
+  --ok: oklch(56% 0.14 155);
+  --ok-wash: oklch(94.5% 0.035 155);
+  --warn: oklch(68% 0.14 72);
+  --warn-wash: oklch(95% 0.045 80);
+  --critical: oklch(55% 0.19 25);
+  --critical-wash: oklch(94.5% 0.035 25);
+  --info: oklch(56% 0.13 245);
+  --info-wash: oklch(95% 0.03 245);
+  --idle: oklch(62% 0.01 150);
+  --idle-wash: oklch(95% 0.005 150);
+
+  /* ---- Type ------------------------------------------------------------- */
+  --font-ui: var(--font-plex-arabic), "Segoe UI", Tahoma, sans-serif;
+
+  --text-micro: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  /* Metric readouts scale with the viewport; they are the thing you read
+     from across a room. */
+  --text-metric: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem);
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.65;
+
+  /* ---- Rhythm ----------------------------------------------------------- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* ---- Geometry ---------------------------------------------------------
+     Instrument panels are not pillowy. Controls stay tight; only surfaces
+     get a noticeable curve. */
+  --radius-control: 6px;
+  --radius-surface: 10px;
+  --radius-pill: 999px;
+
+  --rail-width: 244px;
+
+  /* ---- Elevation --------------------------------------------------------
+     Only for things that float: menus, modals, toasts. Panels use borders. */
+  --lift-menu: 0 6px 24px oklch(24% 0.03 155 / 0.14);
+  --lift-modal: 0 24px 64px oklch(24% 0.03 155 / 0.24);
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --fast: 120ms;
+  --normal: 220ms;
+  --slow: 520ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

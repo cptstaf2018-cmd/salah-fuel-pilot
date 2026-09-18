@@ -1,0 +1,843 @@
+/**
+ * Console components: the shell, the metric band, the station strip, tables,
+ * and the controls that let an operator actually change something.
+ *
+ * Layout is RTL-first (the document sets dir="rtl"), so logical properties are
+ * used throughout and the rail sits on the right without any mirroring code.
+ */
+
+/* ========================================================================== */
+/* Shell                                                                      */
+/* ========================================================================== */
+
+.console {
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--ground);
+}
+
+.console-main {
+  display: grid;
+  align-content: start;
+  gap: var(--s5);
+  min-width: 0;
+  padding: var(--s6);
+}
+
+/* Grid items floor at min-content by default, so a nowrap table inside a panel
+   would otherwise push the whole column wider than the viewport. */
+.console-main > *,
+.kpi,
+.panel {
+  min-width: 0;
+}
+
+/* ========================================================================== */
+/* Rail                                                                       */
+/* ========================================================================== */
+
+.rail {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s6);
+  height: 100dvh;
+  padding: var(--s5) var(--s4);
+  background: var(--chrome);
+  color: var(--chrome-ink);
+}
+
+.rail-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 var(--s2);
+}
+
+.rail-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--chrome-line);
+  border-radius: var(--radius-control);
+  background: oklch(100% 0 0 / 0.06);
+  color: var(--gold);
+  font-size: var(--text-lg);
+}
+
+.rail-brand strong {
+  display: block;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+.rail-brand small {
+  display: block;
+  margin-top: 2px;
+  color: var(--chrome-ink-dim);
+  font-size: var(--text-xs);
+}
+
+.rail-nav {
+  display: grid;
+  gap: 2px;
+}
+
+.rail-section {
+  margin: var(--s4) var(--s2) var(--s2);
+  color: var(--chrome-ink-dim);
+  font-size: var(--text-micro);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.rail-item {
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: var(--s3);
+  padding: 10px var(--s3);
+  border-radius: var(--radius-control);
+  color: var(--chrome-ink-dim);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.rail-item:hover {
+  background: oklch(100% 0 0 / 0.06);
+  color: var(--chrome-ink);
+}
+
+.rail-item[aria-current="page"] {
+  background: oklch(100% 0 0 / 0.1);
+  color: var(--chrome-ink);
+}
+
+/* The active marker rides the inline-start edge, which RTL flips for free. */
+.rail-item[aria-current="page"]::before {
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 0;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  content: "";
+  inline-size: 3px;
+}
+
+.rail-item-icon {
+  flex: none;
+  width: 18px;
+  font-size: var(--text-base);
+  text-align: center;
+}
+
+.rail-count {
+  margin-inline-start: auto;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: oklch(24% 0.05 80);
+  font-size: var(--text-micro);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-user {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-block-start: auto;
+  padding: var(--s3) var(--s2) 0;
+  border-block-start: 1px solid var(--chrome-line);
+}
+
+.rail-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--chrome-soft);
+  color: var(--gold);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.rail-user strong {
+  display: block;
+  font-size: var(--text-sm);
+}
+
+.rail-user small {
+  display: block;
+  color: var(--chrome-ink-dim);
+  font-size: var(--text-xs);
+}
+
+/* ========================================================================== */
+/* Page header                                                                */
+/* ========================================================================== */
+
+.console-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+
+.console-head h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+}
+
+.console-eyebrow {
+  margin: 0 0 var(--s2);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.console-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* ========================================================================== */
+/* Metric band                                                                */
+/* ========================================================================== */
+
+/* Asymmetric on purpose: total stock is the hero reading and earns twice the
+   width, so the band has a focal point instead of four equal boxes. */
+.kpi-band {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: var(--s3);
+}
+
+.kpi {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.kpi-hero {
+  background:
+    linear-gradient(135deg, var(--brand-wash), transparent 62%),
+    var(--surface);
+  border-color: var(--line-strong);
+}
+
+.kpi-label {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.kpi-value {
+  color: var(--ink);
+  font-size: var(--text-metric);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.kpi-hero .kpi-value {
+  color: var(--brand-strong);
+}
+
+.kpi-unit {
+  margin-inline-start: var(--s2);
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.kpi-note {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+/* ========================================================================== */
+/* Panels                                                                     */
+/* ========================================================================== */
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-block-end: 1px solid var(--line);
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+}
+
+.panel-head p {
+  margin: var(--s1) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.panel-body {
+  padding: var(--s4) var(--s5);
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* ========================================================================== */
+/* Station strip                                                              */
+/* ========================================================================== */
+
+/* Rows rather than cards: stations are compared against each other, and a
+   shared baseline makes the stock bars readable as one scale. */
+.station-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(200px, 2fr) auto;
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--s3) var(--s5);
+  border-block-end: 1px solid var(--line);
+  transition: background var(--fast) var(--ease);
+}
+
+.station-row:last-child {
+  border-block-end: 0;
+}
+
+.station-row:hover {
+  background: var(--surface-sunken);
+}
+
+.station-name {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.station-code {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.station-fuels {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+/* ---- Stock bar ---------------------------------------------------------- */
+
+.stock {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.stock-label {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.stock-track {
+  position: relative;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.stock-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+  /* The one directed motion: bars grow from empty on load, so the eye lands on
+     whichever station stops short. */
+  transform-origin: inline-start;
+  animation: stock-fill var(--slow) var(--ease-out) both;
+}
+
+.stock-fill[data-state="warn"] {
+  background: var(--warn);
+}
+
+.stock-fill[data-state="critical"] {
+  background: var(--critical);
+}
+
+/* The threshold notch shows the level at which a station is considered low,
+   so a bar is legible without knowing the numbers behind it. */
+.stock-threshold {
+  position: absolute;
+  inset-block: -2px;
+  width: 2px;
+  background: var(--ink-faint);
+  opacity: 0.5;
+}
+
+.stock-value {
+  min-width: 78px;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes stock-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* ========================================================================== */
+/* Status pills                                                               */
+/* ========================================================================== */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--idle-wash);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pill::before {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  content: "";
+}
+
+.pill[data-state="ok"] {
+  background: var(--ok-wash);
+  color: oklch(38% 0.11 155);
+}
+
+.pill[data-state="warn"] {
+  background: var(--warn-wash);
+  color: oklch(45% 0.11 62);
+}
+
+.pill[data-state="critical"] {
+  background: var(--critical-wash);
+  color: oklch(44% 0.16 25);
+}
+
+.pill[data-state="info"] {
+  background: var(--info-wash);
+  color: oklch(42% 0.12 245);
+}
+
+/* ========================================================================== */
+/* Tables                                                                     */
+/* ========================================================================== */
+
+.table-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  /* Below this the columns would squeeze their own content; the wrapper scrolls
+     instead, which keeps every cell readable on a phone. */
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  text-align: start;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--s3) var(--s4);
+  border-block-end: 1px solid var(--line-strong);
+  background: var(--surface-sunken);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: var(--s3) var(--s4);
+  border-block-end: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-block-end: 0;
+}
+
+.table tbody tr {
+  transition: background var(--fast) var(--ease);
+}
+
+.table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+/* Numeric columns line up because the face is set to tabular figures. */
+.table .num {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.table .num-negative {
+  color: var(--critical);
+}
+
+.table .num-positive {
+  color: var(--ok);
+}
+
+.table .col-actions {
+  width: 1%;
+  text-align: end;
+}
+
+/* Row actions stay present for keyboard and touch, and gain emphasis on hover
+   rather than appearing from nothing — a hidden control is an undiscoverable
+   one. */
+.row-actions {
+  display: inline-flex;
+  gap: var(--s1);
+  opacity: 0.55;
+  transition: opacity var(--fast) var(--ease);
+}
+
+tr:hover .row-actions,
+tr:focus-within .row-actions {
+  opacity: 1;
+}
+
+/* ========================================================================== */
+/* Controls                                                                   */
+/* ========================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: 38px;
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  border-color: var(--ink-faint);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border-color: var(--brand-strong);
+  background: var(--brand-strong);
+  color: oklch(98% 0.01 150);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+/* Reserved for the command that changes the whole governorate's posture. */
+.btn-command {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: oklch(26% 0.06 80);
+}
+
+.btn-command:hover:not(:disabled) {
+  background: oklch(75% 0.12 80);
+  border-color: oklch(75% 0.12 80);
+}
+
+.btn-danger {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--critical);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--critical);
+  background: var(--critical-wash);
+}
+
+.btn-icon {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding: 0 var(--s3);
+  font-size: var(--text-xs);
+}
+
+/* ---- Fields ------------------------------------------------------------- */
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field > span {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.field input,
+.field select {
+  min-height: 38px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s3);
+}
+
+/* ========================================================================== */
+/* Toolbar, empty and loading states                                          */
+/* ========================================================================== */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-wash);
+}
+
+.empty {
+  display: grid;
+  gap: var(--s2);
+  justify-items: center;
+  padding: var(--s7) var(--s5);
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.empty strong {
+  color: var(--ink-soft);
+  font-size: var(--text-base);
+}
+
+.empty p {
+  max-width: 44ch;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.skeleton {
+  border-radius: var(--radius-control);
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 25%,
+    oklch(93% 0.006 150) 37%,
+    var(--surface-sunken) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton 1.4s ease infinite;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+/* ========================================================================== */
+/* Load sequence                                                              */
+/* ========================================================================== */
+
+/* Panels stage in rather than appearing at once, which walks the eye down the
+   page in reading order on first paint. */
+.stage > * {
+  animation: rise var(--normal) var(--ease-out) both;
+}
+
+.stage > *:nth-child(1) { animation-delay: 0ms; }
+.stage > *:nth-child(2) { animation-delay: 40ms; }
+.stage > *:nth-child(3) { animation-delay: 80ms; }
+.stage > *:nth-child(4) { animation-delay: 120ms; }
+.stage > *:nth-child(5) { animation-delay: 160ms; }
+.stage > *:nth-child(n + 6) { animation-delay: 200ms; }
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ========================================================================== */
+/* Responsive                                                                 */
+/* ========================================================================== */
+
+@media (max-width: 1100px) {
+  .kpi-band {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 920px) {
+  .console {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s3);
+  }
+
+  .rail-nav {
+    display: flex;
+    flex: 1 1 100%;
+    gap: var(--s1);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .rail-section,
+  .rail-user {
+    display: none;
+  }
+
+  .rail-item[aria-current="page"]::before {
+    inset: auto 0 0;
+    inline-size: auto;
+    block-size: 2px;
+  }
+
+  .console-main {
+    padding: var(--s4);
+  }
+
+  .station-row {
+    grid-template-columns: 1fr;
+    gap: var(--s3);
+  }
+}
+
+@media (max-width: 560px) {
+  .kpi-band {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-head,
+  .panel-body,
+  .station-row {
+    padding-inline: var(--s4);
+  }
+}
