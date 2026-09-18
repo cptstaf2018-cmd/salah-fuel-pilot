@@ -4,7 +4,14 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Pooled connection (Supabase transaction pooler, port 6543) for the app:
+  // serverless functions open many short-lived connections and need it.
   url      = env("DATABASE_URL")
+  // Migrations cannot run through pgBouncer in transaction mode — the engine
+  // waits on a session-level lock the pooler never grants, which is what made
+  // the build hang until Vercel killed it at 45 minutes. They take the direct
+  // connection (port 5432) instead.
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
