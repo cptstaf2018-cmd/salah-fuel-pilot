@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { auditActions, createAuditLog } from "@/lib/audit";
 import { createSessionToken, getSessionCookieName, getSessionExpiration, hashSessionToken } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/auth/password";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { isLoginThrottled } from "@/lib/auth/login-throttle";
 import { loginSchema } from "@/lib/validation/auth";
 
 function getClientIp(request: NextRequest): string {
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   const ipAddress = getClientIp(request);
   const userAgent = request.headers.get("user-agent");
 
-  if (!checkRateLimit(`login:${ipAddress}`)) {
+  if (await isLoginThrottled(ipAddress)) {
     await createAuditLog({
       action: auditActions.loginFailed,
       resourceType: "auth",
