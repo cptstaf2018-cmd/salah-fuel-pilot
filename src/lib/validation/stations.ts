@@ -1,17 +1,5 @@
 import { z } from "zod";
 
-export const createStationSchema = z
-  .object({
-    governorateId: z.uuid(),
-    districtId: z.uuid().optional(),
-    code: z.string().trim().min(2).max(32),
-    nameAr: z.string().trim().min(2).max(120),
-    nameEn: z.string().trim().min(2).max(120).optional(),
-    latitude: z.number().min(-90).max(90).optional(),
-    longitude: z.number().min(-180).max(180).optional()
-  })
-  .strict();
-
 const stationStatuses = [
   "NORMAL",
   "CROWDED",
@@ -20,6 +8,34 @@ const stationStatuses = [
   "STOPPED",
   "CLOSED"
 ] as const;
+
+export const createStationSchema = z
+  .object({
+    governorateId: z.uuid(),
+    districtId: z.uuid().optional(),
+    code: z.string().trim().min(2).max(32),
+    nameAr: z.string().trim().min(2).max(120),
+    nameEn: z.string().trim().min(2).max(120).optional(),
+    status: z.enum(stationStatuses).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    /**
+     * Fuels the station handles, with the level at which it should warn. A
+     * station with no inventory row cannot record a receipt at all — the
+     * receipt route updates an existing row — so this is required to create a
+     * usable station, not an optional extra.
+     */
+    fuelTypes: z
+      .array(
+        z.object({
+          fuelTypeId: z.uuid(),
+          minimumThresholdLiters: z.number().min(0).max(10_000_000)
+        })
+      )
+      .min(1)
+      .max(20)
+  })
+  .strict();
 
 /** Every field optional, but an empty body is a mistake rather than a no-op. */
 export const updateStationSchema = z

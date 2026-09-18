@@ -147,6 +147,31 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
     }
   }
 
+  /** Creates a resource, then reloads so the new row appears immediately. */
+  async function create(url: string, body: unknown): Promise<boolean> {
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setNotice(result.station ? "تمت إضافة المحطة." : "تم إنشاء قاعدة الأزمة وتوليد المواعيد.");
+      await load();
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر إنشاء السجل.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function command(path: string) {
     setBusy(true);
     setError("");
@@ -295,6 +320,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
               setVehiclesPage((page) => Math.max(1, page + direction))
             }
             onCommand={command}
+            onCreate={create}
             onMutate={mutate}
           />
         ) : (

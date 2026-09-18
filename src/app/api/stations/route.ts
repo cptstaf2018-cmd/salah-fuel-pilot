@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createAuditLog } from "@/lib/audit";
 import { requireApiPermission } from "@/lib/api";
 import { createStationSchema } from "@/lib/validation/stations";
 
@@ -45,13 +47,46 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "بيانات المحطة غير صحيحة." }, { status: 400 });
   }
 
-  const station = await prisma.station.create({
-    data: {
-      ...body.data,
-      latitude: body.data.latitude,
-      longitude: body.data.longitude
-    }
-  });
+  const { fuelTypes, ...stationData } = body.data;
 
-  return NextResponse.json({ station }, { status: 201 });
+  try {
+    // The inventory rows are created with the station, not later: the receipt
+    // route updates an existing row, so a station without them cannot record a
+    // delivery and would look broken the first time it was used.
+    const station = await prisma.$transaction(async (tx) => {
+      const created = await tx.station.create({ data: stationData });
+
+      await tx.fuelInventory.createMany({
+        data: fuelTypes.map((fuel) => ({
+          stationId: created.id,
+          fuelTypeId: fuel.fuelTypeId,
+          quantityLiters: 0,
+          minimumThresholdLiters: fuel.minimumThresholdLiters
+        }))
+      });
+
+      return tx.station.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { fuelInventory: { include: { fuelType: true } } }
+      });
+    });
+
+    await createAuditLog({
+      actorUserId: auth.user.id,
+      action: "STATION_CREATED",
+      resourceType: "station",
+      resourceId: station.id,
+      outcome: "SUCCESS",
+      ipAddress: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+      metadata: { code: station.code, nameAr: station.nameAr, fuelTypes: fuelTypes.length }
+    });
+
+    return NextResponse.json({ station }, { status: 201 });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json({ error: "رمز المحطة مستخدم لمحطة أخرى." }, { status: 409 });
+    }
+    throw error;
+  }
 }

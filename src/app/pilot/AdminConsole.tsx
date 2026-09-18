@@ -5,6 +5,8 @@ import { StationStrip, type StationRow } from "@/components/console/StationStrip
 import { ConfirmDialog, type ConfirmRequest } from "@/components/ui/ConfirmDialog";
 import { EditDialog } from "@/components/ui/EditDialog";
 import { Pill } from "@/components/ui/Pill";
+import { CrisisRuleDialog } from "./CrisisRuleDialog";
+import { StationCreateDialog } from "./StationCreateDialog";
 import { formatCount, formatLiters } from "@/lib/stock";
 import {
   auditLabels,
@@ -25,6 +27,7 @@ type AdminConsoleProps = {
   onVehicleStatus: (value: string) => void;
   onVehiclesPage: (direction: -1 | 1) => void;
   onCommand: (path: string) => Promise<void>;
+  onCreate: (url: string, body: unknown) => Promise<boolean>;
   onMutate: (url: string, method: "PATCH" | "DELETE", body?: unknown) => Promise<boolean>;
 };
 
@@ -58,6 +61,8 @@ export function AdminConsole(props: AdminConsoleProps) {
   const [editingStation, setEditingStation] = useState<DashboardStation | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<DashboardVehicle | null>(null);
   const [dialogError, setDialogError] = useState("");
+  const [addingStation, setAddingStation] = useState(false);
+  const [addingRule, setAddingRule] = useState(false);
 
   const totalLiters = data.stations.reduce(
     (sum, station) =>
@@ -169,6 +174,11 @@ export function AdminConsole(props: AdminConsoleProps) {
             <h2>قاعدة الأزمة</h2>
             <p>الحصة ومدة التبريد وسعة المحطة في الساعة</p>
           </div>
+          <div className="panel-actions">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setAddingRule(true)}>
+              + قاعدة جديدة
+            </button>
+          </div>
         </div>
         {activeRule ? (
           <div className="table-scroll">
@@ -268,6 +278,11 @@ export function AdminConsole(props: AdminConsoleProps) {
           <div>
             <h2>المحطات والمخزون</h2>
             <p>الشريط يقارن المحطات على مقياس واحد · العلامة تشير إلى حد التنبيه</p>
+          </div>
+          <div className="panel-actions">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setAddingStation(true)}>
+              + إضافة محطة
+            </button>
           </div>
         </div>
         <StationStrip
@@ -517,6 +532,32 @@ export function AdminConsole(props: AdminConsoleProps) {
           </table>
         </div>
       </section>
+
+      <StationCreateDialog
+        open={addingStation}
+        busy={busy}
+        governorates={data.governorates}
+        fuelTypes={data.fuelTypes}
+        onDismiss={() => setAddingStation(false)}
+        onCreate={async (body) => {
+          const ok = await props.onCreate("/api/stations", body);
+          if (ok) setAddingStation(false);
+          return ok;
+        }}
+      />
+
+      <CrisisRuleDialog
+        open={addingRule}
+        busy={busy}
+        stations={data.stations}
+        fuelTypes={data.fuelTypes}
+        onDismiss={() => setAddingRule(false)}
+        onCreate={async (body) => {
+          const ok = await props.onCreate("/api/crisis-rules", body);
+          if (ok) setAddingRule(false);
+          return ok;
+        }}
+      />
 
       <ConfirmDialog request={confirm} busy={busy} onDismiss={() => setConfirm(null)} />
 

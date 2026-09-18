@@ -18,13 +18,15 @@ export async function GET(request: NextRequest) {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  const [transactions, vehicles, vehiclesTotal, vehicleFuelSummary, vehicleStatusSummary, logs, crisisRules, dispensedToday] = await Promise.all([
+  const [transactions, vehicles, vehiclesTotal, vehicleFuelSummary, vehicleStatusSummary, logs, governorates, fuelTypes, crisisRules, dispensedToday] = await Promise.all([
     prisma.inventoryTransaction.findMany({ where: { stationId: { in: stationIds } }, include: { station: true, fuelType: true, actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
     admin ? prisma.vehicle.findMany({ where: vehicleWhere, include: { owner: true, fuelType: true }, orderBy: { createdAt: "desc" }, skip: (vehiclesPage - 1) * vehiclesPageSize, take: vehiclesPageSize }) : Promise.resolve([]),
     admin ? prisma.vehicle.count({ where: vehicleWhere }) : Promise.resolve(0),
     admin ? prisma.vehicle.groupBy({ by: ["fuelTypeId"], _count: { _all: true } }) : Promise.resolve([]),
     admin ? prisma.vehicle.groupBy({ by: ["registrationStatus"], _count: { _all: true } }) : Promise.resolve([]),
     admin ? prisma.auditLog.findMany({ include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 30 }) : Promise.resolve([]),
+    admin ? prisma.governorate.findMany({ include: { districts: { orderBy: { nameAr: "asc" } } }, orderBy: { nameAr: "asc" } }) : Promise.resolve([]),
+    admin ? prisma.fuelType.findMany({ where: { isActive: true }, orderBy: { nameAr: "asc" } }) : Promise.resolve([]),
     prisma.crisisRule.findMany({ where: { status: { in: ["ACTIVE", "PAUSED"] } }, include: { fuelType: { select: { nameAr: true } }, _count: { select: { stations: true, allocations: true } } }, orderBy: { createdAt: "desc" } }),
     // Only dispensing moves fuel out, so today's handover total is the sum of
     // those movements — the figure that proves the loop is actually closing.
@@ -42,6 +44,8 @@ export async function GET(request: NextRequest) {
       byStatus: vehicleStatusSummary.map((item) => ({ status: item.registrationStatus, count: item._count._all }))
     },
     logs,
+    governorates,
+    fuelTypes,
     crisisRules,
     dispensedToday: {
       liters: Math.abs(dispensedToday._sum.quantityChange?.toNumber() ?? 0),

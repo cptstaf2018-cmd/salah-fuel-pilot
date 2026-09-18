@@ -32,6 +32,18 @@ export type DashboardCrisisRule = {
   _count: { stations: number; allocations: number };
 };
 
+export type DashboardGovernorate = {
+  id: string;
+  nameAr: string;
+  districts: { id: string; nameAr: string }[];
+};
+
+export type DashboardFuelType = {
+  id: string;
+  code: string;
+  nameAr: string;
+};
+
 export type Dashboard = {
   user: { name: string; role: string };
   stations: DashboardStation[];
@@ -60,7 +72,19 @@ export type Dashboard = {
     actor: { name: string } | null;
   }[];
   crisisRules: DashboardCrisisRule[];
+  governorates: DashboardGovernorate[];
+  fuelTypes: DashboardFuelType[];
   dispensedToday: { liters: number; count: number };
+};
+
+export const vehicleTypeLabels: Record<string, string> = {
+  PRIVATE_CAR: "سيارة خصوصي",
+  TAXI: "أجرة",
+  BUS: "باص",
+  TRUCK: "شاحنة",
+  MOTORCYCLE: "دراجة",
+  GOVERNMENT: "حكومية",
+  OTHER: "أخرى"
 };
 
 export const registrationLabels: Record<string, { label: string; state: "ok" | "warn" | "critical" | "idle" }> = {
