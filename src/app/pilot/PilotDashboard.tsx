@@ -62,9 +62,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
         vehicleFuel,
         vehicleStatus
       });
-      const response = await fetch(`/api/pilot/dashboard?${query}`, {
-        headers: { "x-dashboard-role": role }
-      });
+      const response = await fetch(`/api/pilot/dashboard?${query}`);
 
       if (response.status === 401) {
         setData(null);
@@ -131,7 +129,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
     try {
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
+        headers: { "Content-Type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body)
       });
       const result = await response.json();
@@ -157,7 +155,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
     try {
       const response = await fetch(path, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
+        headers: { "Content-Type": "application/json" },
         body: "{}"
       });
       const result = await response.json();
@@ -186,7 +184,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
     try {
       const response = await fetch("/api/pilot/receipt", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           stationId,
           fuelTypeId: form.get("fuelTypeId"),
@@ -218,7 +216,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
     try {
       const response = await fetch("/api/dispensing/confirm", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ qrPayload, stationId, ...(liters ? { liters } : {}) })
       });
       const result = await response.json();

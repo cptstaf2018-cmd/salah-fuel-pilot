@@ -26,5 +26,13 @@ export async function POST(request: NextRequest) {
 
   const response = NextResponse.json({ ok: true });
   response.cookies.delete(getSessionCookieName());
+
+  // Clear the role-suffixed copies an earlier build wrote. Browsers that signed
+  // in before this change still carry them, and they outlive the session they
+  // were copied from, so signing out has to remove them too.
+  for (const scope of ["admin", "station"]) {
+    response.cookies.delete(`${getSessionCookieName()}_${scope}`);
+  }
+
   return response;
 }

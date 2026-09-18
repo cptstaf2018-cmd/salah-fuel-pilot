@@ -11,9 +11,11 @@ export type AuthenticatedUser = {
 };
 
 export async function getAuthenticatedUser(request: NextRequest): Promise<AuthenticatedUser | null> {
-  const scope = request.headers.get("x-dashboard-role");
-  const cookieName = scope === "admin" || scope === "station" ? `${getSessionCookieName()}_${scope}` : getSessionCookieName();
-  const token = request.cookies.get(cookieName)?.value;
+  // One cookie, chosen by the server. This previously read a cookie named after
+  // the client-supplied `x-dashboard-role` header, which let anyone point the
+  // lookup at a leftover `..._admin` cookie on a shared station device and
+  // inherit a still-valid super admin session without a password.
+  const token = request.cookies.get(getSessionCookieName())?.value;
   const payload = token ? verifySessionToken(token) : null;
 
   if (!token || !payload) {

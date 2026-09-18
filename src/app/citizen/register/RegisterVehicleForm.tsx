@@ -51,9 +51,10 @@ export function RegisterVehicleForm() {
   }, []);
 
   useEffect(() => {
-    if (!result?.vehicle.id) return;
+    if (!result?.qr.payload) return;
     const refresh = async () => {
-      const response = await fetch(`/api/citizen/vehicles?vehicleId=${encodeURIComponent(result.vehicle.id)}`);
+      // Proves ownership with the QR secret rather than the vehicle id.
+      const response = await fetch(`/api/citizen/vehicles?qrPayload=${encodeURIComponent(result.qr.payload)}`);
       if (!response.ok) return;
       const data = await response.json() as { appointment: RegistrationResult["appointment"] };
       if (data.appointment) setResult((current) => current ? { ...current, appointment: data.appointment } : current);
@@ -61,7 +62,7 @@ export function RegisterVehicleForm() {
     void refresh();
     const timer = setInterval(() => void refresh(), 10000);
     return () => clearInterval(timer);
-  }, [result?.vehicle.id]);
+  }, [result?.qr.payload]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

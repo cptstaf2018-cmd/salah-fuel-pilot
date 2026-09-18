@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth/current-user";
 import { registerVehicleSchema } from "@/lib/validation/vehicles";
-import { registerVehicle } from "@/lib/vehicles";
+import { registerVehicle, verifyVehicleQr } from "@/lib/vehicles";
 
 function normalizeVehicleInput(data: ReturnType<typeof registerVehicleSchema.parse>) {
   return {
@@ -15,9 +15,17 @@ function normalizeVehicleInput(data: ReturnType<typeof registerVehicleSchema.par
 }
 
 export async function GET(request: NextRequest) {
-  const vehicleId = request.nextUrl.searchParams.get("vehicleId");
-  if (vehicleId) {
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId }, include: { fuelType: true, appointments: { where: { status: "SCHEDULED" }, orderBy: { createdAt: "desc" }, take: 1, include: { station: true, timeSlot: true } } } });
+  // The confirmation screen looks its own appointment up straight after
+  // registering. It proves ownership with the QR secret rather than the vehicle
+  // id: the id travels in a query string, so it reaches browser history, proxy
+  // logs and Referer headers, and knowing it should not be enough to learn
+  // which station a named citizen will be standing at, and when.
+  const qrPayload = request.nextUrl.searchParams.get("qrPayload");
+  if (qrPayload) {
+    const scanned = await verifyVehicleQr(qrPayload);
+    if (!scanned) return NextResponse.json({ error: "رمز المركبة غير صالح." }, { status: 401 });
+
+    const vehicle = await prisma.vehicle.findUnique({ where: { id: scanned.id }, include: { fuelType: true, appointments: { where: { status: "SCHEDULED" }, orderBy: { createdAt: "desc" }, take: 1, include: { station: true, timeSlot: true } } } });
     if (!vehicle) return NextResponse.json({ error: "المركبة غير موجودة." }, { status: 404 });
     const appointment = vehicle.appointments[0];
     return NextResponse.json({ appointment: appointment ? { stationName: appointment.station.nameAr, fuelName: vehicle.fuelType.nameAr, quotaLiters: appointment.quotaLiters.toString(), startsAt: appointment.timeSlot.startsAt.toISOString(), endsAt: appointment.timeSlot.endsAt.toISOString() } : null });

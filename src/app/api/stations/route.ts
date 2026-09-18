@@ -10,7 +10,15 @@ export async function GET(request: NextRequest) {
     return auth.response;
   }
 
+  // stations:read is granted to station managers too, so the listing is scoped
+  // to the stations a user actually works at. Without this a single manager
+  // could read every station's live stock across the governorate.
+  const governorateWide = ["SUPER_ADMIN", "GOVERNORATE_ADMIN", "OPERATIONS_MANAGER", "DISTRIBUTION_ADMIN"].includes(
+    auth.user.role
+  );
+
   const stations = await prisma.station.findMany({
+    where: governorateWide ? {} : { stationUsers: { some: { userId: auth.user.id } } },
     orderBy: { createdAt: "desc" },
     include: {
       governorate: true,
