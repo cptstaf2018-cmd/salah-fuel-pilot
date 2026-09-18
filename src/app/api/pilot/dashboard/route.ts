@@ -15,13 +15,20 @@ export async function GET(request: NextRequest) {
   const stations = await prisma.station.findMany({ where: admin ? {} : { stationUsers: { some: { userId: user.id } } }, include: { fuelInventory: { include: { fuelType: true } } }, orderBy: { code: "asc" } });
   const stationIds = stations.map((station) => station.id);
   const vehicleWhere = admin ? { ...(vehicleSearch ? { OR: [{ plateNumber: { contains: vehicleSearch, mode: "insensitive" as const } }, { owner: { fullName: { contains: vehicleSearch, mode: "insensitive" as const } } }] } : {}), ...(vehicleFuel ? { fuelTypeId: vehicleFuel } : {}), ...(vehicleStatus && Object.values(VehicleRegistrationStatus).includes(vehicleStatus as VehicleRegistrationStatus) ? { registrationStatus: vehicleStatus as VehicleRegistrationStatus } : {}) } : undefined;
-  const [transactions, vehicles, vehiclesTotal, vehicleFuelSummary, vehicleStatusSummary, logs] = await Promise.all([
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const [transactions, vehicles, vehiclesTotal, vehicleFuelSummary, vehicleStatusSummary, logs, crisisRules, dispensedToday] = await Promise.all([
     prisma.inventoryTransaction.findMany({ where: { stationId: { in: stationIds } }, include: { station: true, fuelType: true, actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
     admin ? prisma.vehicle.findMany({ where: vehicleWhere, include: { owner: true, fuelType: true }, orderBy: { createdAt: "desc" }, skip: (vehiclesPage - 1) * vehiclesPageSize, take: vehiclesPageSize }) : Promise.resolve([]),
     admin ? prisma.vehicle.count({ where: vehicleWhere }) : Promise.resolve(0),
     admin ? prisma.vehicle.groupBy({ by: ["fuelTypeId"], _count: { _all: true } }) : Promise.resolve([]),
     admin ? prisma.vehicle.groupBy({ by: ["registrationStatus"], _count: { _all: true } }) : Promise.resolve([]),
-    admin ? prisma.auditLog.findMany({ include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 30 }) : Promise.resolve([])
+    admin ? prisma.auditLog.findMany({ include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 30 }) : Promise.resolve([]),
+    prisma.crisisRule.findMany({ where: { status: { in: ["ACTIVE", "PAUSED"] } }, include: { fuelType: { select: { nameAr: true } }, _count: { select: { stations: true, allocations: true } } }, orderBy: { createdAt: "desc" } }),
+    // Only dispensing moves fuel out, so today's handover total is the sum of
+    // those movements — the figure that proves the loop is actually closing.
+    prisma.inventoryTransaction.aggregate({ where: { stationId: { in: stationIds }, type: "DISPENSING", createdAt: { gte: startOfToday } }, _sum: { quantityChange: true }, _count: { _all: true } })
   ]);
   const fuelNames = new Map(stations.flatMap((station) => station.fuelInventory.map((item) => [item.fuelTypeId, item.fuelType.nameAr])));
   return NextResponse.json({
@@ -34,6 +41,11 @@ export async function GET(request: NextRequest) {
       byFuel: vehicleFuelSummary.map((item) => ({ fuelTypeId: item.fuelTypeId, fuelName: fuelNames.get(item.fuelTypeId) || "غير معروف", count: item._count._all })),
       byStatus: vehicleStatusSummary.map((item) => ({ status: item.registrationStatus, count: item._count._all }))
     },
-    logs
+    logs,
+    crisisRules,
+    dispensedToday: {
+      liters: Math.abs(dispensedToday._sum.quantityChange?.toNumber() ?? 0),
+      count: dispensedToday._count._all
+    }
   }, { headers: { "Cache-Control": "no-store" } });
 }

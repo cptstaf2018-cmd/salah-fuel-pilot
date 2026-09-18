@@ -841,3 +841,175 @@ tr:focus-within .row-actions {
     padding-inline: var(--s4);
   }
 }
+
+/* ========================================================================== */
+/* Dialog                                                                     */
+/* ========================================================================== */
+
+.dialog {
+  max-width: min(460px, calc(100vw - 2 * var(--s4)));
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--lift-modal);
+}
+
+.dialog::backdrop {
+  background: oklch(24% 0.03 155 / 0.45);
+}
+
+.dialog-body {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s5);
+}
+
+.dialog-body h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.dialog-body p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin-block-start: var(--s2);
+}
+
+/* ========================================================================== */
+/* Feedback banners                                                           */
+/* ========================================================================== */
+
+.banner {
+  display: flex;
+  align-items: start;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--idle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.banner[data-tone="ok"] {
+  border-inline-start-color: var(--ok);
+  background: var(--ok-wash);
+}
+
+.banner[data-tone="critical"] {
+  border-inline-start-color: var(--critical);
+  background: var(--critical-wash);
+}
+
+.banner[data-tone="info"] {
+  border-inline-start-color: var(--info);
+  background: var(--info-wash);
+}
+
+/* ========================================================================== */
+/* Login                                                                      */
+/* ========================================================================== */
+
+.login-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--s5);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, var(--brand-wash), transparent 70%),
+    var(--ground);
+}
+
+.login-card {
+  display: grid;
+  gap: var(--s4);
+  width: min(400px, 100%);
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  box-shadow: var(--lift-menu);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.login-brand .rail-mark {
+  border-color: var(--line-strong);
+  background: var(--brand-wash);
+  color: var(--brand);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.login-card > p {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* ========================================================================== */
+/* Scan panel                                                                 */
+/* ========================================================================== */
+
+/* Sized for a phone held at a pump: one field, one very large button. */
+.scan-form {
+  display: grid;
+  gap: var(--s4);
+}
+
+.scan-form input {
+  min-height: 52px;
+  font-size: var(--text-lg);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-form .btn {
+  min-height: 56px;
+  font-size: var(--text-lg);
+}
+
+.scan-result {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.scan-result dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s2) var(--s4);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.scan-result dt {
+  color: var(--ink-faint);
+}
+
+.scan-result dd {
+  margin: 0;
+  font-weight: 700;
+}

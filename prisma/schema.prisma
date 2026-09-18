@@ -103,6 +103,7 @@ model User {
   inventoryTransactions InventoryTransaction[]
   vehicleOwner VehicleOwner?
   crisisRulesCreated CrisisRule[] @relation("CrisisRuleCreator")
+  appointmentsDispensed Appointment[] @relation("AppointmentDispenser")
 
   @@index([role])
   @@index([status])
@@ -438,14 +439,22 @@ model Appointment {
   timeSlotId   String            @map("time_slot_id") @db.Uuid
   status       AppointmentStatus @default(SCHEDULED)
   quotaLiters  Decimal           @map("quota_liters") @db.Decimal(10, 3)
+
+  // Set when fuel actually changes hands. Until then the appointment is only a
+  // promise; these three columns are what make a dispense auditable.
+  dispensedAt       DateTime? @map("dispensed_at")
+  dispensedByUserId String?   @map("dispensed_by_user_id") @db.Uuid
+  dispensedLiters   Decimal?  @map("dispensed_liters") @db.Decimal(10, 3)
+
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
 
-  crisisRule CrisisRule @relation(fields: [crisisRuleId], references: [id], onDelete: Restrict)
-  vehicle    Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  station    Station    @relation(fields: [stationId], references: [id], onDelete: Restrict)
-  fuelType   FuelType   @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
-  timeSlot   TimeSlot   @relation(fields: [timeSlotId], references: [id], onDelete: Restrict)
+  crisisRule  CrisisRule @relation(fields: [crisisRuleId], references: [id], onDelete: Restrict)
+  vehicle     Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  station     Station    @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  fuelType    FuelType   @relation(fields: [fuelTypeId], references: [id], onDelete: Restrict)
+  timeSlot    TimeSlot   @relation(fields: [timeSlotId], references: [id], onDelete: Restrict)
+  dispensedBy User?      @relation("AppointmentDispenser", fields: [dispensedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([crisisRuleId, vehicleId])
   @@index([stationId, status])

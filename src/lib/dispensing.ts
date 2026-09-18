@@ -1,4 +1,8 @@
-import type { AppointmentStatus } from "@prisma/client";
+import { Prisma, type AppointmentStatus } from "@prisma/client";
+import { auditActions, createAuditLog } from "@/lib/audit";
+import { calculateInventoryMovement } from "@/lib/inventory";
+import { prisma } from "@/lib/prisma";
+import { verifyVehicleQr } from "@/lib/vehicles";
 
 /**
  * Why a dispense was refused. The station screen maps each one to an Arabic
@@ -78,3 +82,190 @@ export function evaluateDispense(input: EvaluateDispenseInput): EvaluateDispense
 
   return { ok: true, liters };
 }
+
+/** Reasons that stop a dispense before the appointment is even looked up. */
+export type DispenseLookupRefusal = "VEHICLE_NOT_FOUND" | "NO_APPOINTMENT" | "RACE_LOST";
+
+export type ConfirmDispenseResult =
+  | {
+      ok: true;
+      liters: number;
+      appointmentId: string;
+      vehiclePlate: string;
+      ownerName: string;
+      fuelName: string;
+      remainingLiters: number;
+    }
+  | { ok: false; reason: DispenseRefusal | DispenseLookupRefusal };
+
+type ConfirmDispenseInput = {
+  qrPayload: string;
+  /** The station the operator is standing at; already checked against the user. */
+  stationId: string;
+  liters?: number;
+  actorUserId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
+
+/**
+ * Hands fuel over against a scanned QR code: the step that closes the loop from
+ * registration through allocation to an actual tank being filled, and the only
+ * place inventory ever decreases.
+ *
+ * Two writes are conditional rather than read-then-write, because a busy station
+ * has several pumps scanning at once: the appointment only completes if it is
+ * still outstanding, and stock only decrements if it still covers the quantity.
+ */
+export async function confirmDispense(input: ConfirmDispenseInput): Promise<ConfirmDispenseResult> {
+  const audit = async (outcome: "SUCCESS" | "DENIED", metadata: Prisma.InputJsonObject) =>
+    createAuditLog({
+      actorUserId: input.actorUserId,
+      action: outcome === "SUCCESS" ? auditActions.dispensingConfirmed : auditActions.dispensingRejected,
+      resourceType: "appointment",
+      resourceId: typeof metadata.appointmentId === "string" ? metadata.appointmentId : null,
+      outcome,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+      metadata
+    });
+
+  const vehicle = await verifyVehicleQr(input.qrPayload);
+
+  if (!vehicle) {
+    await audit("DENIED", { reason: "VEHICLE_NOT_FOUND", stationId: input.stationId });
+    return { ok: false, reason: "VEHICLE_NOT_FOUND" };
+  }
+
+  // The most recent appointment carries the verdict, completed or not, so a
+  // second scan reports ALREADY_DISPENSED instead of looking unallocated.
+  const appointment = await prisma.appointment.findFirst({
+    where: { vehicleId: vehicle.id },
+    orderBy: { createdAt: "desc" },
+    include: { timeSlot: true, crisisRule: true, fuelType: true }
+  });
+
+  if (!appointment) {
+    await audit("DENIED", { reason: "NO_APPOINTMENT", vehicleId: vehicle.id });
+    return { ok: false, reason: "NO_APPOINTMENT" };
+  }
+
+  const inventory = await prisma.fuelInventory.findUnique({
+    where: {
+      stationId_fuelTypeId: {
+        stationId: appointment.stationId,
+        fuelTypeId: appointment.fuelTypeId
+      }
+    }
+  });
+
+  const verdict = evaluateDispense({
+    appointmentStatus: appointment.status,
+    appointmentStationId: appointment.stationId,
+    allowedStationIds: [input.stationId],
+    slotStartsAt: appointment.timeSlot.startsAt,
+    ruleEndsAt: appointment.crisisRule.endsAt,
+    now: new Date(),
+    quotaLiters: appointment.quotaLiters.toNumber(),
+    requestedLiters: input.liters,
+    availableLiters: inventory?.quantityLiters.toNumber() ?? 0
+  });
+
+  if (!verdict.ok) {
+    await audit("DENIED", {
+      reason: verdict.reason,
+      appointmentId: appointment.id,
+      vehicleId: vehicle.id,
+      stationId: input.stationId
+    });
+    return verdict;
+  }
+
+  const { liters } = verdict;
+
+  try {
+    const remainingLiters = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.appointment.updateMany({
+        where: { id: appointment.id, status: { in: ["SCHEDULED", "READY"] } },
+        data: {
+          status: "COMPLETED",
+          dispensedAt: new Date(),
+          dispensedByUserId: input.actorUserId,
+          dispensedLiters: new Prisma.Decimal(liters)
+        }
+      });
+
+      // Another pump completed it between the check above and this update.
+      if (claimed.count !== 1) {
+        throw new DispenseRaceError();
+      }
+
+      const drawn = await tx.fuelInventory.updateMany({
+        where: { id: inventory!.id, quantityLiters: { gte: new Prisma.Decimal(liters) } },
+        data: { quantityLiters: { decrement: new Prisma.Decimal(liters) } }
+      });
+
+      // Stock fell below the quantity while this dispense was being prepared.
+      if (drawn.count !== 1) {
+        throw new DispenseStockError();
+      }
+
+      const updated = await tx.fuelInventory.findUniqueOrThrow({ where: { id: inventory!.id } });
+      const movement = calculateInventoryMovement({
+        currentQuantity: updated.quantityLiters.toNumber() + liters,
+        quantityChange: -liters,
+        type: "DISPENSING"
+      });
+
+      await tx.inventoryTransaction.create({
+        data: {
+          stationId: appointment.stationId,
+          fuelTypeId: appointment.fuelTypeId,
+          inventoryId: inventory!.id,
+          type: "DISPENSING",
+          quantityBefore: new Prisma.Decimal(movement.quantityBefore),
+          quantityChange: new Prisma.Decimal(movement.quantityChange),
+          quantityAfter: new Prisma.Decimal(movement.quantityAfter),
+          actorUserId: input.actorUserId,
+          reason: `صرف حصة · موعد ${appointment.id.slice(0, 8)}`,
+          referenceType: "APPOINTMENT",
+          referenceId: appointment.id
+        }
+      });
+
+      return updated.quantityLiters.toNumber();
+    });
+
+    await audit("SUCCESS", {
+      appointmentId: appointment.id,
+      vehicleId: vehicle.id,
+      stationId: appointment.stationId,
+      liters
+    });
+
+    return {
+      ok: true,
+      liters,
+      appointmentId: appointment.id,
+      vehiclePlate: vehicle.plateNumber,
+      ownerName: vehicle.owner.fullName,
+      fuelName: appointment.fuelType.nameAr,
+      remainingLiters
+    };
+  } catch (error) {
+    if (error instanceof DispenseRaceError) {
+      await audit("DENIED", { reason: "RACE_LOST", appointmentId: appointment.id });
+      return { ok: false, reason: "ALREADY_DISPENSED" };
+    }
+
+    if (error instanceof DispenseStockError) {
+      await audit("DENIED", { reason: "INSUFFICIENT_STOCK", appointmentId: appointment.id });
+      return { ok: false, reason: "INSUFFICIENT_STOCK" };
+    }
+
+    throw error;
+  }
+}
+
+class DispenseRaceError extends Error {}
+class DispenseStockError extends Error {}

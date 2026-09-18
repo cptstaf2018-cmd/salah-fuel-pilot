@@ -12,6 +12,31 @@ export const createStationSchema = z
   })
   .strict();
 
+const stationStatuses = [
+  "NORMAL",
+  "CROWDED",
+  "LOW_STOCK",
+  "OUT_OF_STOCK",
+  "STOPPED",
+  "CLOSED"
+] as const;
+
+/** Every field optional, but an empty body is a mistake rather than a no-op. */
+export const updateStationSchema = z
+  .object({
+    code: z.string().trim().min(2).max(32).optional(),
+    nameAr: z.string().trim().min(2).max(120).optional(),
+    nameEn: z.string().trim().min(2).max(120).nullable().optional(),
+    status: z.enum(stationStatuses).optional(),
+    districtId: z.uuid().nullable().optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional()
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "No fields to update"
+  });
+
 export const createFuelTypeSchema = z
   .object({
     code: z.string().trim().min(2).max(32),

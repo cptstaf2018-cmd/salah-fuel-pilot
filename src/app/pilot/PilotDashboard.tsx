@@ -1,66 +1,58 @@
 "use client";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Rail, type RailGroup } from "@/components/console/Rail";
+import { AdminConsole } from "./AdminConsole";
+import { LoginCard } from "./LoginCard";
+import { StationConsole } from "./StationConsole";
+import type { Dashboard } from "./types";
 
-type Station = {
-  id: string;
-  nameAr: string;
-  fuelInventory: {
-    fuelTypeId: string;
-    quantityLiters: string;
-    fuelType: { nameAr: string };
-  }[];
-};
-type Dashboard = {
-  user: { name: string; role: string };
-  stations: Station[];
-  transactions: {
-    id: string;
-    createdAt: string;
-    station: { nameAr: string };
-    fuelType: { nameAr: string };
-    quantityChange: string;
-    quantityAfter: string;
-    reason: string;
-    actor: { name: string };
-  }[];
-  vehicles: {
-    id: string;
-    plateNumber: string;
-    owner: { fullName: string };
-    fuelType: { nameAr: string };
-    registrationStatus: string;
-  }[];
-  vehiclesPage: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-  };
-  vehicleSummary: {
-    byFuel: { fuelTypeId: string; fuelName: string; count: number }[];
-    byStatus: { status: string; count: number }[];
-  };
-  logs: {
-    id: string;
-    action: string;
-    createdAt: string;
-    outcome: string;
-    actor: { name: string } | null;
-  }[];
-};
-const number = (value: string | number) =>
-  Number(value).toLocaleString("ar-IQ");
+const adminRail = (pending: number): RailGroup[] => [
+  {
+    title: "المتابعة",
+    items: [
+      { href: "#top", label: "غرفة العمليات", icon: "◈" },
+      { href: "#stations", label: "المحطات", icon: "⛽" },
+      { href: "#movements", label: "حركات المخزون", icon: "⇅" }
+    ]
+  },
+  {
+    title: "الإدارة",
+    items: [
+      { href: "#citizens", label: "المواطنون", icon: "☰", count: pending },
+      { href: "#crisis", label: "قواعد الأزمة", icon: "◉" }
+    ]
+  },
+  {
+    title: "الرقابة",
+    items: [{ href: "#audit", label: "سجل الرقابة", icon: "◴" }]
+  }
+];
+
+const stationRail: RailGroup[] = [
+  {
+    title: "التشغيل",
+    items: [
+      { href: "#dispense", label: "صرف حصة", icon: "◈" },
+      { href: "#receive", label: "استلام وقود", icon: "↧" },
+      { href: "#stock", label: "المخزون", icon: "⛽" },
+      { href: "#movements", label: "الحركات", icon: "⇅" }
+    ]
+  }
+];
 
 export function PilotDashboard({ role }: { role: "admin" | "station" }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [stationId, setStationId] = useState("");
   const [vehiclesPage, setVehiclesPage] = useState(1);
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [vehicleFuel, setVehicleFuel] = useState("");
   const [vehicleStatus, setVehicleStatus] = useState("");
+
+  const expectedRole = role === "admin" ? "SUPER_ADMIN" : "STATION_MANAGER";
+
   const load = useCallback(async () => {
     try {
       const query = new URLSearchParams({
@@ -68,54 +60,60 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
         vehiclesPageSize: "50",
         vehicleSearch,
         vehicleFuel,
-        vehicleStatus,
+        vehicleStatus
       });
       const response = await fetch(`/api/pilot/dashboard?${query}`, {
-        headers: { "x-dashboard-role": role },
+        headers: { "x-dashboard-role": role }
       });
-      const result = await response.json();
+
       if (response.status === 401) {
         setData(null);
         return;
       }
+
+      const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      if (
-        result.user.role !==
-        (role === "admin" ? "SUPER_ADMIN" : "STATION_MANAGER")
-      ) {
+      if (result.user.role !== expectedRole) {
         setData(null);
         return;
       }
+
       setData(result);
       setStationId((previous) => previous || result.stations[0]?.id || "");
     } catch {
       setError("تعذر تحديث البيانات. تحقق من الاتصال ثم أعد المحاولة.");
     }
-  }, [role, vehiclesPage, vehicleSearch, vehicleFuel, vehicleStatus]);
+  }, [role, expectedRole, vehiclesPage, vehicleSearch, vehicleFuel, vehicleStatus]);
+
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 5000);
-    return () => clearInterval(timer);
   }, [load]);
+
+  // Stock moves whenever any station reports a receipt, so the console refreshes
+  // on a timer rather than waiting for the operator to reload.
+  useEffect(() => {
+    if (!data) return;
+    const timer = setInterval(() => void load(), 15000);
+    return () => clearInterval(timer);
+  }, [data, load]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
+
     try {
       const response = await fetch("/api/pilot/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(form)),
+        body: JSON.stringify(Object.fromEntries(form))
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      if (
-        result.user.role !==
-        (role === "admin" ? "SUPER_ADMIN" : "STATION_MANAGER")
-      )
+      if (result.user.role !== expectedRole) {
         throw new Error("استخدم الحساب المخصص لهذه اللوحة.");
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر الدخول.");
@@ -123,29 +121,87 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       setBusy(false);
     }
   }
+
+  /** Every write goes through here so one place owns busy, errors and reload. */
+  async function mutate(url: string, method: "PATCH" | "DELETE", body?: unknown): Promise<boolean> {
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      // The API downgrades a delete to a close or suspend when history exists;
+      // that decision has to reach the operator, not be swallowed as success.
+      if (result.message) setNotice(result.message);
+      await load();
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تنفيذ العملية.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function command(path: string) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
+        body: "{}"
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setNotice(
+        path.includes("activate")
+          ? `تم تفعيل وضع الأزمة · ${result.created} قاعدة جديدة.`
+          : `تم تخصيص ${result.allocated} مركبة.`
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تنفيذ العملية.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function receive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setMessage("");
     setError("");
+    setNotice("");
     const form = new FormData(event.currentTarget);
+    const element = event.currentTarget;
+
     try {
       const response = await fetch("/api/pilot/receipt", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-dashboard-role": role,
-        },
+        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
         body: JSON.stringify({
           stationId,
           fuelTypeId: form.get("fuelTypeId"),
           liters: Number(form.get("liters")),
-          reason: form.get("reason"),
-        }),
+          reason: form.get("reason")
+        })
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      setMessage("تمت إضافة الكمية وحفظ الحركة في سجل المراقبة.");
+      setNotice(
+        result.allocation?.allocated
+          ? `تمت إضافة الكمية وتخصيص ${result.allocation.allocated} مركبة.`
+          : "تمت إضافة الكمية وحفظ الحركة في سجل المراقبة."
+      );
+      element.reset();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر حفظ الاستلام.");
@@ -153,330 +209,107 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       setBusy(false);
     }
   }
-  async function runAllocation(path: "/api/crisis-rules/activate" | "/api/allocations/auto") {
-    setBusy(true); setError(""); setMessage("");
+
+  async function dispense(qrPayload: string, liters?: number) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+
     try {
-      const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "x-dashboard-role": role }, body: "{}" });
+      const response = await fetch("/api/dispensing/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-dashboard-role": role },
+        body: JSON.stringify({ qrPayload, stationId, ...(liters ? { liters } : {}) })
+      });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      setMessage(path.includes("activate") ? "تم تفعيل وضع الأزمة." : `تم تخصيص ${result.allocated} مركبة تلقائيًا.`);
+
+      if (!response.ok) {
+        return { tone: "critical" as const, title: result.error ?? "تعذر إتمام الصرف." };
+      }
+
       await load();
-    } catch (err) { setError(err instanceof Error ? err.message : "تعذر تنفيذ العملية."); }
-    finally { setBusy(false); }
+      return {
+        tone: "ok" as const,
+        title: "تم الصرف وخُصم المخزون.",
+        detail: {
+          plate: result.vehiclePlate,
+          owner: result.ownerName,
+          fuel: result.fuelName,
+          liters: result.liters,
+          remaining: result.remainingLiters
+        }
+      };
+    } catch {
+      return { tone: "critical" as const, title: "تعذر الاتصال بالخادم." };
+    } finally {
+      setBusy(false);
+    }
   }
-  const station = data?.stations.find((item) => item.id === stationId);
-  const pageStart = data?.vehiclesPage.total
-    ? (data.vehiclesPage.page - 1) * data.vehiclesPage.pageSize + 1
-    : 0;
-  const pageEnd = data
-    ? Math.min(
-        data.vehiclesPage.page * data.vehiclesPage.pageSize,
-        data.vehiclesPage.total,
-      )
-    : 0;
+
+  if (!data) {
+    return <LoginCard role={role} busy={busy} error={error} onSubmit={login} />;
+  }
+
+  const pending =
+    data.vehicleSummary.byStatus.find((item) => item.status === "PENDING_ALLOCATION")?.count ?? 0;
+
   return (
-    <div className={`dashboard-app ${data ? "dashboard-authenticated" : "dashboard-login"}`}>
-      {data && <aside className="dashboard-sidebar">
-        <div className="dashboard-brand"><span className="brand-symbol">⛽</span><div><strong>نظام توزيع الوقود</strong><small>صلاح الدين</small></div></div>
-        <nav className="dashboard-nav" aria-label="التنقل الرئيسي">
-          <a className="dashboard-nav-item active" href="#top">الرئيسية</a>
-          <a className="dashboard-nav-item" href="#transactions">المعاملات</a>
-          <a className="dashboard-nav-item" href="#vehicles">المركبات</a>
-          <a className="dashboard-nav-item" href="#reports">التقارير</a>
-          <a className="dashboard-nav-item" href="#alerts">الإشعارات</a>
-        </nav>
-        <div className="dashboard-user"><span className="avatar">{data?.user.name?.slice(0, 1) || "م"}</span><div><strong>{data?.user.name || "مستخدم النظام"}</strong><small>{role === "admin" ? "سوبر أدمن" : "صاحب محطة"}</small></div></div>
-      </aside>}
-    <main id="top" className="pilot-shell">
-      <header className="pilot-header dashboard-topbar">
-        <div>
-          <p className="eyebrow">Baghdad Future AI · منظومة صلاح الدين</p>
-          <h1>{role === "admin" ? "لوحة السوبر أدمن" : "لوحة صاحب المحطة"}</h1>
-          <p>
-            {data
-              ? `مرحبًا ${data.user.name} · تحديث كل 5 ثوانٍ`
-              : "سجّل الدخول إلى لوحة التحكم"}
+    <div className="console" id="top">
+      <Rail
+        groups={role === "admin" ? adminRail(pending) : stationRail}
+        currentHref="#top"
+        userName={data.user.name}
+        roleLabel={role === "admin" ? "سوبر أدمن" : "صاحب محطة"}
+      />
+
+      <main className="console-main stage">
+        {error && (
+          <p className="banner" data-tone="critical" role="alert">
+            {error}
           </p>
-        </div>
-        <a className="inline-action" href="/">
-          اللوحات الثلاث
-        </a>
-      </header>
-      <p className="pilot-notice">
-        تُعرض الكميات والحصص وفق سجلات الاستلام الفعلية، ويُحدّث التخصيص تلقائيًا بعد تسجيل الكمية.
-      </p>
-      {role === "admin" && data && <section className="panel" aria-label="التحكم بالتخصيص">
-        <div className="pilot-section-head">
-          <div><h2>التحكم بالتخصيص والأزمة</h2><p>من هنا يفعّل السوبر أدمن الأزمة ويشغّل توزيع الحصص للمركبات المنتظرة.</p></div>
-          <span className="badge">إدارة عليا</span>
-        </div>
-        <div className="form-row">
-          <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/crisis-rules/activate")}>تفعيل وضع الأزمة</button>
-          <button className="primary-action" type="button" disabled={busy} onClick={() => void runAllocation("/api/allocations/auto")}>تخصيص الحصص تلقائيًا</button>
-        </div>
-      </section>}
-      {data && <div className="dashboard-toolbar"><span className="live-dot" /> آخر تحديث تلقائي كل 5 ثوانٍ <button type="button" className="toolbar-action" onClick={() => void load()}>تحديث الآن</button></div>}
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
-      )}
-      {message && (
-        <p role="status" className="pilot-notice">
-          {message}
-        </p>
-      )}
-      {!data ? (
-        <form className="citizen-form panel pilot-login" onSubmit={login}>
-          <h2>دخول {role === "admin" ? "الإدارة" : "صاحب المحطة"}</h2>
-          <label>
-            الحساب
-            <select name="identifier">
-              {role === "admin" ? (
-                <option value="admin@pilot.local">السوبر أدمن</option>
-              ) : (
-                ["تكريت الداخل", "القادسية", "العوجة"].map((name, i) => (
-                  <option key={name} value={`station${i + 1}@pilot.local`}>
-                    {name}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-          <label>
-            كلمة المرور
-            <input
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-            />
-          </label>
-          <button className="primary-action" disabled={busy}>
-            {busy ? "جاري الدخول…" : "دخول"}
-          </button>
-        </form>
-      ) : (
-        <>
-          <section className="pilot-stations">
-            {data.stations.map((item) => (
-              <article className="panel" key={item.id}>
-                <p className="eyebrow">المخزون المتوفر</p>
-                <h2>{item.nameAr}</h2>
-                {item.fuelInventory.map((fuel) => (
-                  <div className="pilot-balance" key={fuel.fuelTypeId}>
-                    <span>{fuel.fuelType.nameAr}</span>
-                    <strong>
-                      {number(fuel.quantityLiters)} <small>لتر</small>
-                    </strong>
-                  </div>
-                ))}
-              </article>
-            ))}
-          </section>
-          {role === "station" && <section id="transactions" className="panel">
-            <h2>إضافة وقود مستلم</h2>
-            <p>يسجل النظام صاحب الإضافة والكمية قبل وبعد الاستلام.</p>
-            <form className="citizen-form" onSubmit={receive}>
-              <div className="form-row">
-                <label>
-                  المحطة
-                  <select
-                    value={stationId}
-                    onChange={(e) => setStationId(e.target.value)}
-                  >
-                    {data.stations.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.nameAr}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  الوقود
-                  <select name="fuelTypeId" key={stationId} required>
-                    {station?.fuelInventory.map((fuel) => (
-                      <option key={fuel.fuelTypeId} value={fuel.fuelTypeId}>
-                        {fuel.fuelType.nameAr}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="form-row">
-                <label>
-                  الكمية باللتر
-                  <input
-                    name="liters"
-                    type="number"
-                    min="0.001"
-                    max="1000000"
-                    step="0.001"
-                    required
-                  />
-                </label>
-                <label>
-                  سبب الاستلام / رقم الوصل
-                  <input name="reason" minLength={3} maxLength={300} required />
-                </label>
-              </div>
-              <button className="primary-action" disabled={busy || !station}>
-                {busy ? "جاري الحفظ…" : "إضافة الكمية"}
-              </button>
-            </form>
-          </section>}
-          {role === "station" && (
-            <section className="panel">
-              <h2>إضافة مواطن ومركبته</h2>
-              <p>يمكن مساعدة المواطن بتعبئة استمارة التسجيل وإصدار رمز QR.</p>
-              <a
-                className="inline-action"
-                href="/citizen/register"
-                target="_blank"
-                rel="noreferrer"
-              >
-                فتح تسجيل المواطن
-              </a>
-            </section>
-          )}
-          <section className="panel">
-            <h2>حركات المخزون · آخر 50 حركة</h2>
-            <div className="pilot-table">
-              <table>
-                <thead>
-                  <tr>
-                    {[
-                      "الوقت",
-                      "المحطة",
-                      "الوقود",
-                      "الإضافة / لتر",
-                      "الرصيد / لتر",
-                      "بواسطة",
-                      "السبب",
-                    ].map((name) => (
-                      <th key={name}>{name}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.transactions.slice(0, 10).map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        {new Date(item.createdAt).toLocaleString("ar-IQ")}
-                      </td>
-                      <td>{item.station.nameAr}</td>
-                      <td>{item.fuelType.nameAr}</td>
-                      <td>{number(item.quantityChange)}</td>
-                      <td>{number(item.quantityAfter)}</td>
-                      <td>{item.actor.name}</td>
-                      <td>{item.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-          {role === "admin" && (
-        <>
-          <section className="panel pilot-filter-panel">
-            <h2>بحث وتصفية المواطنين</h2>
-            <p>ابحث بالاسم أو رقم اللوحة، ثم اختر نوع الوقود أو حالة التسجيل.</p>
-            <div className="pilot-filters">
-              <input aria-label="بحث بالاسم أو رقم اللوحة" placeholder="بحث بالاسم أو رقم اللوحة" value={vehicleSearch} onChange={(event) => { setVehicleSearch(event.target.value); setVehiclesPage(1); }} />
-              <select aria-label="فلترة الوقود" value={vehicleFuel} onChange={(event) => { setVehicleFuel(event.target.value); setVehiclesPage(1); }}><option value="">كل أنواع الوقود</option>{data.vehicleSummary.byFuel.map((item) => <option key={item.fuelTypeId} value={item.fuelTypeId}>{item.fuelName}</option>)}</select>
-              <select aria-label="فلترة الحالة" value={vehicleStatus} onChange={(event) => { setVehicleStatus(event.target.value); setVehiclesPage(1); }}><option value="">كل الحالات</option>{data.vehicleSummary.byStatus.map((item) => <option key={item.status} value={item.status}>{item.status === "PENDING_ALLOCATION" ? "بانتظار التخصيص" : item.status}</option>)}</select>
-            </div>
-          </section>
-              <section id="vehicles" className="panel">
-                <div className="pilot-section-head">
-                  <div>
-                    <h2>المواطنون المسجلون</h2>
-                    <p>
-                      {data.vehiclesPage.total
-                        ? `عرض ${number(pageStart)} إلى ${number(pageEnd)} من أصل ${number(data.vehiclesPage.total)} مركبة`
-                        : "لم يسجل مواطن بعد. افتح لوحة المواطن وسجّل مركبة لتظهر هنا."}
-                    </p>
-                  </div>
-                  <div className="pilot-pager">
-                    <button
-                      type="button"
-                      disabled={vehiclesPage <= 1}
-                      onClick={() =>
-                        setVehiclesPage((page) => Math.max(1, page - 1))
-                      }
-                    >
-                      السابق
-                    </button>
-                    <span>
-                      صفحة {number(data.vehiclesPage.page)} /{" "}
-                      {number(data.vehiclesPage.totalPages)}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={vehiclesPage >= data.vehiclesPage.totalPages}
-                      onClick={() => setVehiclesPage((page) => page + 1)}
-                    >
-                      التالي
-                    </button>
-                  </div>
-                </div>
-                <div className="pilot-summary">
-                  {data.vehicleSummary.byFuel.map((item) => (
-                    <span key={item.fuelTypeId}>
-                      {item.fuelName}: {number(item.count)}
-                    </span>
-                  ))}
-                  {data.vehicleSummary.byStatus.map((item) => (
-                    <span key={item.status}>
-                      {item.status === "PENDING_ALLOCATION"
-                        ? "بانتظار التخصيص"
-                        : item.status}
-                      : {number(item.count)}
-                    </span>
-                  ))}
-                </div>
-                {!data.vehicles.length && <p>لا توجد مركبات في هذه الصفحة.</p>}
-                <div className="pilot-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>اسم المواطن</th>
-                        <th>اللوحة</th>
-                        <th>الوقود</th>
-                        <th>الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.vehicles.map((vehicle) => (
-                        <tr key={vehicle.id}>
-                          <td>{vehicle.owner.fullName}</td>
-                          <td>{vehicle.plateNumber}</td>
-                          <td>{vehicle.fuelType.nameAr}</td>
-                          <td>
-                            {vehicle.registrationStatus === "PENDING_ALLOCATION"
-                              ? "بانتظار التخصيص"
-                              : vehicle.registrationStatus}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-              <section id="reports" className="panel">
-                <h2>سجل الرقابة · آخر 30 إجراء</h2>
-                {data.logs.slice(0, 10).map((log) => (
-                  <p key={log.id}>
-                    {new Date(log.createdAt).toLocaleString("ar-IQ")} ·{" "}
-                    {log.actor?.name || "تسجيل مواطن"} · {log.action === "AUTH_LOGIN_SUCCEEDED" ? "دخول ناجح" : log.action === "PILOT_FUEL_RECEIVED" ? "استلام وقود" : log.action === "ALLOCATION_CREATED" ? "تخصيص حصة" : "إجراء إداري"} · {log.outcome === "SUCCESS" ? "ناجح" : "مرفوض"}
-                  </p>
-                ))}
-              </section>
-            </>
-          )}
-        </>
-      )}
-    </main>
+        )}
+        {notice && (
+          <p className="banner" data-tone="ok" role="status">
+            {notice}
+          </p>
+        )}
+
+        {role === "admin" ? (
+          <AdminConsole
+            data={data}
+            busy={busy}
+            vehicleSearch={vehicleSearch}
+            vehicleFuel={vehicleFuel}
+            vehicleStatus={vehicleStatus}
+            onVehicleSearch={(value) => {
+              setVehicleSearch(value);
+              setVehiclesPage(1);
+            }}
+            onVehicleFuel={(value) => {
+              setVehicleFuel(value);
+              setVehiclesPage(1);
+            }}
+            onVehicleStatus={(value) => {
+              setVehicleStatus(value);
+              setVehiclesPage(1);
+            }}
+            onVehiclesPage={(direction) =>
+              setVehiclesPage((page) => Math.max(1, page + direction))
+            }
+            onCommand={command}
+            onMutate={mutate}
+          />
+        ) : (
+          <StationConsole
+            data={data}
+            busy={busy}
+            stationId={stationId}
+            onStationChange={setStationId}
+            onReceive={receive}
+            onDispense={dispense}
+          />
+        )}
+      </main>
     </div>
   );
 }

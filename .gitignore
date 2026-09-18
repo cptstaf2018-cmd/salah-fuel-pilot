@@ -9,3 +9,6 @@ dist
 
 .vercel
 .env*
+
+# Playwright MCP screenshots and traces
+.playwright-mcp/
