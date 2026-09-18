@@ -31,7 +31,20 @@ export const permissions = [
 export type Permission = (typeof permissions)[number];
 
 const rolePermissions: Record<Role, Permission[]> = {
-  SUPER_ADMIN: ["system:manage", "users:manage", "stations:manage", "crisis:manage", "distribution:manage", "inventory:read", "audit:read"],
+  SUPER_ADMIN: [
+    "system:manage",
+    "users:manage",
+    "governorate:read",
+    "crisis:manage",
+    "stations:read",
+    "stations:manage",
+    "inventory:read",
+    "inventory:adjust",
+    "dispensing:verify",
+    "dispensing:confirm",
+    "distribution:manage",
+    "audit:read"
+  ],
   GOVERNORATE_ADMIN: [
     "governorate:read",
     "crisis:manage",

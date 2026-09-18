@@ -302,8 +302,8 @@ model Vehicle {
   ownerId            String                    @map("owner_id") @db.Uuid
   fuelTypeId         String                    @map("fuel_type_id") @db.Uuid
   plateNumber        String                    @map("plate_number")
-  plateGovernorate   String?                   @map("plate_governorate")
-  plateCategory      String?                   @map("plate_category")
+  plateGovernorate   String                    @default("") @map("plate_governorate")
+  plateCategory      String                    @default("") @map("plate_category")
   plateMetadata      Json?                     @map("plate_metadata")
   vehicleType        VehicleType               @map("vehicle_type")
   registrationStatus VehicleRegistrationStatus @default(PENDING_ALLOCATION) @map("registration_status")

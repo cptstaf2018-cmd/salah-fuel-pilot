@@ -17,10 +17,15 @@ type RegisterVehicleInput = {
   userAgent?: string | null;
 };
 
+/** Prisma's unique constraint violation, raised when two registrations race each other. */
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
 export async function registerVehicle(input: RegisterVehicleInput) {
   const qr = createVehicleQrSecret();
 
-  const result = await prisma.$transaction(async (tx) => {
+  const runRegistration = () => prisma.$transaction(async (tx) => {
     const existingOwner = await tx.vehicleOwner.findUnique({ where: { phone: input.phone }, include: { vehicles: { take: 1 } } });
     if (existingOwner?.vehicles.length) {
       throw new Error("رقم الهاتف مسجل مسبقاً لمركبة. استخدم صفحة التعديل بدلاً من التسجيل الجديد.");
@@ -38,12 +43,19 @@ export async function registerVehicle(input: RegisterVehicleInput) {
     });
 
 
-    const existingVehicle = await tx.vehicle.findFirst({
+    // Match the database's uniqueness key exactly. An absent governorate or category is
+    // stored as "" rather than NULL, so a plate registered without them still collides.
+    const plateGovernorate = input.plateGovernorate ?? "";
+    const plateCategory = input.plateCategory ?? "";
+
+    const existingVehicle = await tx.vehicle.findUnique({
       where: {
-        plateNumber: input.plateNumber,
-        ...(input.plateGovernorate ? { plateGovernorate: input.plateGovernorate } : {})
-      },
-      include: { qrTokens: { where: { revokedAt: null }, orderBy: { createdAt: "desc" }, take: 1 } }
+        plateNumber_plateGovernorate_plateCategory: {
+          plateNumber: input.plateNumber,
+          plateGovernorate,
+          plateCategory
+        }
+      }
     });
     if (existingVehicle) {
       throw new Error("هذه المركبة مسجلة مسبقاً. استخدم رمز QR الموجود لديك.");
@@ -54,8 +66,8 @@ export async function registerVehicle(input: RegisterVehicleInput) {
         ownerId: owner.id,
         fuelTypeId: input.fuelTypeId,
         plateNumber: input.plateNumber,
-        plateGovernorate: input.plateGovernorate,
-        plateCategory: input.plateCategory,
+        plateGovernorate,
+        plateCategory,
         plateMetadata: input.plateMetadata,
         vehicleType: input.vehicleType
       }
@@ -71,6 +83,18 @@ export async function registerVehicle(input: RegisterVehicleInput) {
 
     return { owner, vehicle, qrToken };
   });
+
+  // The pre-flight check above cannot see a registration committing concurrently, so the
+  // database constraint is the real guard. Report it as the same duplicate message.
+  let result: Awaited<ReturnType<typeof runRegistration>>;
+  try {
+    result = await runRegistration();
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new Error("هذه المركبة مسجلة مسبقاً. استخدم رمز QR الموجود لديك.");
+    }
+    throw error;
+  }
 
   await createAuditLog({
     actorUserId: input.actorUserId,

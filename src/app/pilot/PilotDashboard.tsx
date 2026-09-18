@@ -50,8 +50,6 @@ type Dashboard = {
 };
 const number = (value: string | number) =>
   Number(value).toLocaleString("ar-IQ");
-const distribute = (total: number, buckets: number, index: number) =>
-  Math.floor(total / buckets) + (index < total % buckets ? 1 : 0);
 
 export function PilotDashboard({ role }: { role: "admin" | "station" }) {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -63,8 +61,6 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [vehicleFuel, setVehicleFuel] = useState("");
   const [vehicleStatus, setVehicleStatus] = useState("");
-  const [planningCars, setPlanningCars] = useState(50000);
-  const [quotaLiters, setQuotaLiters] = useState(20);
   const load = useCallback(async () => {
     try {
       const query = new URLSearchParams({
@@ -185,7 +181,6 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
         <nav className="dashboard-nav" aria-label="التنقل الرئيسي">
           <a className="dashboard-nav-item active" href="#top">الرئيسية</a>
           <a className="dashboard-nav-item" href="#transactions">المعاملات</a>
-          <a className="dashboard-nav-item" href="#allocations">المخصصات</a>
           <a className="dashboard-nav-item" href="#vehicles">المركبات</a>
           <a className="dashboard-nav-item" href="#reports">التقارير</a>
           <a className="dashboard-nav-item" href="#alerts">الإشعارات</a>
@@ -392,61 +387,6 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
               <select aria-label="فلترة الحالة" value={vehicleStatus} onChange={(event) => { setVehicleStatus(event.target.value); setVehiclesPage(1); }}><option value="">كل الحالات</option>{data.vehicleSummary.byStatus.map((item) => <option key={item.status} value={item.status}>{item.status === "PENDING_ALLOCATION" ? "بانتظار التخصيص" : item.status}</option>)}</select>
             </div>
           </section>
-              <section id="allocations" className="panel">
-                <div className="pilot-section-head">
-                  <div>
-                    <h2>تقسيم السيارات على المحطات</h2>
-                    <p>
-                      تُعرض المركبات المسجلة موزعة حسب المحطة وحالة التخصيص.
-                    </p>
-                  </div>
-                  <span className="badge">{number(planningCars)} سيارة</span>
-                </div>
-                <div className="form-row">
-                  <label>
-                    عدد السيارات للتخطيط
-                    <input
-                      value={planningCars}
-                      onChange={(event) =>
-                        setPlanningCars(Math.max(0, Number(event.target.value)))
-                      }
-                      type="number"
-                      min="0"
-                      step="1"
-                    />
-                  </label>
-                  <label>
-                    حصة السيارة باللتر
-                    <input
-                      value={quotaLiters}
-                      onChange={(event) =>
-                        setQuotaLiters(Math.max(1, Number(event.target.value)))
-                      }
-                      type="number"
-                      min="1"
-                      step="1"
-                    />
-                  </label>
-                </div>
-                <div className="pilot-stations">
-                  {data.stations.map((item, index) => {
-                    const cars = distribute(
-                      planningCars,
-                      data.stations.length,
-                      index,
-                    );
-                    return (
-                      <article className="pilot-mini-card" key={item.id}>
-                        <span>{item.nameAr}</span>
-                        <strong>{number(cars)} سيارة</strong>
-                        <small>
-                          تحتاج تقريباً {number(cars * quotaLiters)} لتر
-                        </small>
-                      </article>
-                    );
-                  })}
-                </div>
-              </section>
               <section id="vehicles" className="panel">
                 <div className="pilot-section-head">
                   <div>
