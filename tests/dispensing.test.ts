@@ -13,6 +13,8 @@ function input(overrides: Partial<EvaluateDispenseInput> = {}): EvaluateDispense
     ruleEndsAt,
     now: new Date("2026-09-18T08:30:00.000Z"),
     quotaLiters: 20,
+    cooldownHours: 48,
+    lastDispensedAt: null,
     requestedLiters: undefined,
     availableLiters: 5000,
     ...overrides
@@ -91,6 +93,24 @@ describe("evaluateDispense", () => {
       ok: false,
       reason: "INVALID_QUANTITY"
     });
+  });
+
+  it("refuses a vehicle served again inside its cooldown", () => {
+    // Section 10 of the specification: the pump is the last gate, so an
+    // allocation issued before an earlier handover cannot slip through.
+    expect(
+      evaluateDispense(
+        input({ lastDispensedAt: new Date("2026-09-18T06:00:00.000Z") })
+      )
+    ).toEqual({ ok: false, reason: "WITHIN_COOLDOWN" });
+  });
+
+  it("serves a vehicle whose cooldown has elapsed", () => {
+    expect(
+      evaluateDispense(
+        input({ lastDispensedAt: new Date("2026-09-15T06:00:00.000Z") })
+      )
+    ).toEqual({ ok: true, liters: 20 });
   });
 
   it("refuses when the station cannot cover the quantity", () => {

@@ -219,11 +219,18 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      setNotice(
-        result.allocation?.allocated
-          ? `تمت إضافة الكمية وتخصيص ${result.allocation.allocated} مركبة.`
-          : "تمت إضافة الكمية وحفظ الحركة في سجل المراقبة."
-      );
+      // A warning means the delivery saved but allocation did not run; it must
+      // not read as an outright success, or the operator will not re-run it.
+      if (result.warning) {
+        setNotice("");
+        setError(result.warning);
+      } else {
+        setNotice(
+          result.allocation?.allocated
+            ? `تمت إضافة الكمية وتخصيص ${result.allocation.allocated} مركبة.`
+            : "تمت إضافة الكمية وحفظ الحركة في سجل المراقبة."
+        );
+      }
       element.reset();
       await load();
     } catch (err) {

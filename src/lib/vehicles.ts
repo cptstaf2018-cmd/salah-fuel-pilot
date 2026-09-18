@@ -26,10 +26,10 @@ export async function registerVehicle(input: RegisterVehicleInput) {
   const qr = createVehicleQrSecret();
 
   const runRegistration = () => prisma.$transaction(async (tx) => {
-    const existingOwner = await tx.vehicleOwner.findUnique({ where: { phone: input.phone }, include: { vehicles: { take: 1 } } });
-    if (existingOwner?.vehicles.length) {
-      throw new Error("رقم الهاتف مسجل مسبقاً لمركبة. استخدم صفحة التعديل بدلاً من التسجيل الجديد.");
-    }
+    // The upsert comes first so it takes the row lock on this phone number.
+    // Reading before writing let two concurrent registrations both see no
+    // existing owner, both pass the check, and both create a vehicle — one
+    // phone holding two rations, with no database constraint to catch it.
     const owner = await tx.vehicleOwner.upsert({
       where: { phone: input.phone },
       create: {
@@ -41,6 +41,13 @@ export async function registerVehicle(input: RegisterVehicleInput) {
         fullName: input.ownerFullName
       }
     });
+
+    // A concurrent registration for the same phone now blocks on that lock and
+    // sees the committed count here rather than a stale empty read.
+    const ownedVehicles = await tx.vehicle.count({ where: { ownerId: owner.id } });
+    if (ownedVehicles > 0) {
+      throw new Error("رقم الهاتف مسجل مسبقاً لمركبة. استخدم صفحة التعديل بدلاً من التسجيل الجديد.");
+    }
 
 
     // Match the database's uniqueness key exactly. An absent governorate or category is

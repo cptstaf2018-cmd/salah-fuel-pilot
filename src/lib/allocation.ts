@@ -136,10 +136,21 @@ export async function createCrisisRule(input: {
   return rule;
 }
 
+/** Raised when a vehicle is still inside its rule's re-fuelling cooldown. */
+export class CooldownError extends Error {}
+/** Raised when no eligible station has an open slot. */
+export class NoSlotError extends Error {}
+
 export async function assignVehicleToCrisisRule(input: {
   crisisRuleId: string;
   vehicleId: string;
   actorUserId: string;
+  /**
+   * Stations that can actually serve this vehicle. Omitted means every station
+   * on the rule; the auto-allocator narrows it to those still holding enough
+   * fuel, so a citizen is never booked into a station with an empty tank.
+   */
+  eligibleStationIds?: string[];
   ipAddress?: string | null;
   userAgent?: string | null;
 }) {
@@ -164,12 +175,33 @@ export async function assignVehicleToCrisisRule(input: {
       throw new Error("Vehicle type is not eligible for this rule");
     }
 
+    // Section 10: a vehicle served recently is not eligible again yet. Checked
+    // here so both the auto-allocator and a manual assignment are bound by it.
+    const lastServed = await tx.appointment.findFirst({
+      where: { vehicleId: vehicle.id, dispensedAt: { not: null } },
+      orderBy: { dispensedAt: "desc" },
+      select: { dispensedAt: true }
+    });
+
+    if (isWithinCooldown(lastServed?.dispensedAt ?? null, rule.cooldownHours, new Date())) {
+      throw new CooldownError("Vehicle is still within its refuelling cooldown");
+    }
+
+    const ruleStationIds = rule.stations.map((station) => station.stationId);
+    const stationIds = input.eligibleStationIds
+      ? ruleStationIds.filter((id) => input.eligibleStationIds!.includes(id))
+      : ruleStationIds;
+
+    if (!stationIds.length) {
+      throw new NoSlotError("No station with enough fuel for this rule");
+    }
+
     const slots = await tx.timeSlot.findMany({
       where: {
         crisisRuleId: rule.id,
         fuelTypeId: rule.fuelTypeId,
         startsAt: { gte: new Date() },
-        stationId: { in: rule.stations.map((station) => station.stationId) }
+        stationId: { in: stationIds }
       },
       orderBy: [{ startsAt: "asc" }, { bookedCount: "asc" }]
     });
@@ -177,7 +209,7 @@ export async function assignVehicleToCrisisRule(input: {
     const selected = selectBestSlot(slots);
 
     if (!selected) {
-      throw new Error("No available time slot");
+      throw new NoSlotError("No available time slot");
     }
 
     const updated = await tx.timeSlot.updateMany({
@@ -191,7 +223,7 @@ export async function assignVehicleToCrisisRule(input: {
     });
 
     if (updated.count !== 1) {
-      throw new Error("Time slot is already full");
+      throw new NoSlotError("Time slot is already full");
     }
 
     const allocation = await tx.allocation.create({
@@ -256,29 +288,95 @@ export async function autoAllocatePendingVehicles(input: {
   let allocated = 0;
 
   for (const rule of rules) {
+    const quotaLiters = rule.quotaLiters.toNumber();
+    if (quotaLiters <= 0) continue;
+
     const inventory = await prisma.fuelInventory.findMany({
       where: { fuelTypeId: rule.fuelTypeId, stationId: { in: rule.stations.map((station) => station.stationId) } },
-      select: { quantityLiters: true }
+      select: { stationId: true, quantityLiters: true }
     });
-    let remainingLiters = inventory.reduce((sum, item) => sum + item.quantityLiters.toNumber(), 0);
-    const quotaLiters = rule.quotaLiters.toNumber();
-    if (quotaLiters <= 0 || remainingLiters < quotaLiters) continue;
+
+    // Per station, not pooled. Summing every station into one figure made the
+    // loop believe a rule could serve N vehicles while sending some of them to
+    // a station holding nothing — they queued and were refused at the pump.
+    const remainingByStation = new Map(
+      inventory.map((item) => [item.stationId, item.quantityLiters.toNumber()])
+    );
+
+    const stationsWithFuel = () =>
+      [...remainingByStation.entries()]
+        .filter(([, liters]) => liters >= quotaLiters)
+        .map(([stationId]) => stationId);
+
+    if (!stationsWithFuel().length) continue;
 
     const vehicles = await prisma.vehicle.findMany({
       where: { fuelTypeId: rule.fuelTypeId, registrationStatus: "PENDING_ALLOCATION", vehicleType: { in: rule.includedVehicleTypes }, allocations: { none: { crisisRuleId: rule.id } } },
       orderBy: { createdAt: "asc" },
       take: 1000
     });
+
     for (const vehicle of vehicles) {
-      if (remainingLiters < quotaLiters) break;
+      const eligibleStationIds = stationsWithFuel();
+      if (!eligibleStationIds.length) break;
+
       try {
-        await assignVehicleToCrisisRule({ ...input, crisisRuleId: rule.id, vehicleId: vehicle.id });
+        const { allocation } = await assignVehicleToCrisisRule({
+          ...input,
+          crisisRuleId: rule.id,
+          vehicleId: vehicle.id,
+          eligibleStationIds
+        });
+
         allocated += 1;
-        remainingLiters -= quotaLiters;
-      } catch {
-        // Full slots or a concurrent assignment are expected; continue with the queue.
+        // Reserve against the station that actually took the booking.
+        remainingByStation.set(
+          allocation.stationId,
+          (remainingByStation.get(allocation.stationId) ?? 0) - quotaLiters
+        );
+      } catch (error) {
+        // A full slot or a vehicle still in cooldown is an ordinary outcome for
+        // one vehicle in the queue. Anything else is a fault, and swallowing it
+        // silently would leave a broken allocation sweep reporting success.
+        if (error instanceof NoSlotError || error instanceof CooldownError) continue;
+
+        await createAuditLog({
+          actorUserId: input.actorUserId,
+          action: auditActions.allocationCreated,
+          resourceType: "allocation",
+          resourceId: vehicle.id,
+          outcome: "FAILED",
+          ipAddress: input.ipAddress,
+          userAgent: input.userAgent,
+          metadata: {
+            crisisRuleId: rule.id,
+            vehicleId: vehicle.id,
+            reason: error instanceof Error ? error.message : "UNKNOWN"
+          }
+        });
       }
     }
   }
   return { allocated };
+}
+
+/**
+ * Whether a vehicle is still inside the re-fuelling cooldown its rule sets.
+ *
+ * Section 10 of the specification — "منع تكرار الاستلام" — requires this to be
+ * checked server-side before a vehicle is served again, and it is one of the
+ * six problems the system exists to solve. cooldownHours was stored on every
+ * crisis rule and read by nothing.
+ */
+export function isWithinCooldown(
+  lastDispensedAt: Date | null,
+  cooldownHours: number,
+  now: Date
+): boolean {
+  if (!lastDispensedAt || cooldownHours <= 0) {
+    return false;
+  }
+
+  const elapsedHours = (now.getTime() - lastDispensedAt.getTime()) / (60 * 60 * 1000);
+  return elapsedHours < cooldownHours;
 }

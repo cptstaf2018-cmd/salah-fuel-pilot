@@ -1,4 +1,5 @@
 import { Prisma, type AppointmentStatus } from "@prisma/client";
+import { isWithinCooldown } from "@/lib/allocation";
 import { auditActions, createAuditLog } from "@/lib/audit";
 import { calculateInventoryMovement } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +15,7 @@ export type DispenseRefusal =
   | "WRONG_STATION"
   | "RULE_ENDED"
   | "TOO_EARLY"
+  | "WITHIN_COOLDOWN"
   | "INVALID_QUANTITY"
   | "ABOVE_QUOTA"
   | "INSUFFICIENT_STOCK";
@@ -27,6 +29,9 @@ export type EvaluateDispenseInput = {
   ruleEndsAt: Date;
   now: Date;
   quotaLiters: number;
+  /** The rule's re-fuelling cooldown, and when this vehicle was last served. */
+  cooldownHours: number;
+  lastDispensedAt: Date | null;
   /** Operator override when the tank fills before the quota is reached. */
   requestedLiters: number | undefined;
   availableLiters: number;
@@ -64,6 +69,13 @@ export function evaluateDispense(input: EvaluateDispenseInput): EvaluateDispense
   // and refusing a late arrival would strand someone holding a valid allocation.
   if (input.now < input.slotStartsAt) {
     return { ok: false, reason: "TOO_EARLY" };
+  }
+
+  // Section 10: the last handover gates the next one, checked at the pump and
+  // not only when the appointment was issued — an allocation can outlive a
+  // dispense made under an earlier rule.
+  if (isWithinCooldown(input.lastDispensedAt, input.cooldownHours, input.now)) {
+    return { ok: false, reason: "WITHIN_COOLDOWN" };
   }
 
   const liters = input.requestedLiters ?? input.quotaLiters;
@@ -150,6 +162,14 @@ export async function confirmDispense(input: ConfirmDispenseInput): Promise<Conf
     return { ok: false, reason: "NO_APPOINTMENT" };
   }
 
+  // The most recent completed handover for this vehicle, whichever rule it
+  // was made under, is what the cooldown measures from.
+  const lastServed = await prisma.appointment.findFirst({
+    where: { vehicleId: vehicle.id, dispensedAt: { not: null } },
+    orderBy: { dispensedAt: "desc" },
+    select: { dispensedAt: true }
+  });
+
   const inventory = await prisma.fuelInventory.findUnique({
     where: {
       stationId_fuelTypeId: {
@@ -167,6 +187,8 @@ export async function confirmDispense(input: ConfirmDispenseInput): Promise<Conf
     ruleEndsAt: appointment.crisisRule.endsAt,
     now: new Date(),
     quotaLiters: appointment.quotaLiters.toNumber(),
+    cooldownHours: appointment.crisisRule.cooldownHours,
+    lastDispensedAt: lastServed?.dispensedAt ?? null,
     requestedLiters: input.liters,
     availableLiters: inventory?.quantityLiters.toNumber() ?? 0
   });
