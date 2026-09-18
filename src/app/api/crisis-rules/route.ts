@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireApiPermission } from "@/lib/api";
-import { createCrisisRule } from "@/lib/allocation";
+import { autoAllocatePendingVehicles, createCrisisRule } from "@/lib/allocation";
 import { prisma } from "@/lib/prisma";
 import { createCrisisRuleSchema } from "@/lib/validation/crisis";
 
@@ -47,7 +47,17 @@ export async function POST(request: NextRequest) {
       userAgent: request.headers.get("user-agent")
     });
 
-    return NextResponse.json({ rule }, { status: 201 });
+    // A rule exists to distribute fuel, so distribution starts with it. Leaving
+    // it to a separate button meant an officer activated a crisis, saw nothing
+    // allocated, and had no way to tell whether the rule had worked.
+    const allocation = await autoAllocatePendingVehicles({
+      fuelTypeId: body.data.fuelTypeId,
+      actorUserId: auth.user.id,
+      ipAddress: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent")
+    });
+
+    return NextResponse.json({ rule, allocation }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "تعذر إنشاء قاعدة الأزمة." },

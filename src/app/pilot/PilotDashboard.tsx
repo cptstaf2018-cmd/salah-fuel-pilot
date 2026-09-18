@@ -161,7 +161,11 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      setNotice(result.station ? "تمت إضافة المحطة." : "تم إنشاء قاعدة الأزمة وتوليد المواعيد.");
+      setNotice(
+        result.station
+          ? "تمت إضافة المحطة."
+          : `تم إنشاء قاعدة الأزمة وتخصيص ${result.allocation?.allocated ?? 0} مركبة.`
+      );
       await load();
       return true;
     } catch (err) {

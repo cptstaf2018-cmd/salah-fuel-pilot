@@ -809,6 +809,19 @@ tr:focus-within .row-actions {
     scrollbar-width: none;
   }
 
+  /* Each nav group is a wrapper div. Without this the flex row lays out the
+     three groups side by side and stacks their items vertically inside, which
+     is not a tab bar — it is three tiny columns. `contents` dissolves the
+     wrappers so the items themselves become the flex children. */
+  .rail-nav > div {
+    display: contents;
+  }
+
+  .rail-item {
+    flex: none;
+    white-space: nowrap;
+  }
+
   .rail-section,
   .rail-user {
     display: none;
