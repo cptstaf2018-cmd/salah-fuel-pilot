@@ -16,6 +16,7 @@ type RegistrationResult = {
   };
   qr: {
     publicId: string;
+    payload: string;
     svg: string;
   };
   appointment?: { stationName: string; fuelName: string; quotaLiters: string; startsAt: string; endsAt: string } | null;
@@ -99,6 +100,7 @@ export function RegisterVehicleForm() {
     if (front instanceof File && back instanceof File && front.size > 0 && back.size > 0) {
       const documents = new FormData();
       documents.set("vehicleId", data.vehicle.id);
+      documents.set("qrPayload", data.qr.payload);
       documents.set("front", front);
       documents.set("back", back);
       const upload = await fetch("/api/citizen/documents", { method: "POST", body: documents });
@@ -112,7 +114,7 @@ export function RegisterVehicleForm() {
     event.preventDefault();
     if (!result) return;
     setLoading(true); setError(null);
-    const response = await fetch("/api/citizen/documents", { method: "POST", body: (() => { const data = new FormData(event.currentTarget); data.set("vehicleId", result.vehicle.id); return data; })() });
+    const response = await fetch("/api/citizen/documents", { method: "POST", body: (() => { const data = new FormData(event.currentTarget); data.set("vehicleId", result.vehicle.id); data.set("qrPayload", result.qr.payload); return data; })() });
     const data = await response.json();
     if (!response.ok) setError(data.error || "تعذر رفع البطاقة."); else setDocuments(true);
     setLoading(false);

@@ -13,6 +13,7 @@ export const auditActions = {
   dispensingConfirmed: "DISPENSING_CONFIRMED",
   dispensingRejected: "DISPENSING_REJECTED",
   vehicleRegistered: "VEHICLE_REGISTERED",
+  nationalIdUploaded: "NATIONAL_ID_UPLOADED",
   vehicleQrIssued: "VEHICLE_QR_ISSUED",
   crisisRuleCreated: "CRISIS_RULE_CREATED",
   allocationCreated: "ALLOCATION_CREATED",
