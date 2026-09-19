@@ -92,11 +92,39 @@ export async function DELETE(request: NextRequest, context: Context) {
     });
   }
 
-  await prisma.$transaction([
-    prisma.fuelInventory.deleteMany({ where: { stationId: id } }),
-    prisma.stationUser.deleteMany({ where: { stationId: id } }),
-    prisma.station.delete({ where: { id } })
-  ]);
+  const staff = await prisma.stationUser.findMany({
+    where: { stationId: id },
+    select: { userId: true }
+  });
+
+  const removedStaff = await prisma.$transaction(async (tx) => {
+    await tx.fuelInventory.deleteMany({ where: { stationId: id } });
+    await tx.stationUser.deleteMany({ where: { stationId: id } });
+    await tx.station.delete({ where: { id } });
+
+    if (!staff.length) return 0;
+
+    // The manager account is created with the station, so it goes with it.
+    // Left behind it is invisible — no screen lists an account with no station
+    // — yet it can still sign in to an empty console, and its phone number goes
+    // on blocking anyone rebuilding the same station under the same login.
+    //
+    // Only accounts with nothing left to their name: still attached to another
+    // station, or named on a dispense or a stock movement, and they stay. Those
+    // references are Restrict, and the name on them is what makes a handover
+    // auditable.
+    const { count } = await tx.user.deleteMany({
+      where: {
+        id: { in: staff.map((link) => link.userId) },
+        role: { in: ["STATION_MANAGER", "STATION_EMPLOYEE"] },
+        stationUsers: { none: {} },
+        inventoryTransactions: { none: {} },
+        appointmentsDispensed: { none: {} }
+      }
+    });
+
+    return count;
+  });
 
   await createAuditLog({
     actorUserId: auth.user.id,
@@ -106,8 +134,13 @@ export async function DELETE(request: NextRequest, context: Context) {
     outcome: "SUCCESS",
     ipAddress: request.headers.get("x-forwarded-for"),
     userAgent: request.headers.get("user-agent"),
-    metadata: { code: station.code, nameAr: station.nameAr }
+    metadata: { code: station.code, nameAr: station.nameAr, removedStaff }
   });
 
-  return NextResponse.json({ deleted: true });
+  return NextResponse.json({
+    deleted: true,
+    message: removedStaff
+      ? `حُذفت المحطة و${removedStaff} من حسابات العاملين فيها.`
+      : "حُذفت المحطة."
+  });
 }
