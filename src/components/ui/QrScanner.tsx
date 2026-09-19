@@ -87,8 +87,20 @@ export function QrScanner({ onResult }: QrScannerProps) {
       };
 
       frameRef.current = requestAnimationFrame(tick);
-    } catch {
-      setError("تعذر فتح الكاميرا. تأكد من منح الإذن، أو استخدم الإدخال اليدوي بالأسفل.");
+    } catch (err) {
+      // getUserMedia reports every failure the same way to the user unless the
+      // name is read: a refused prompt, a camera another app is holding, and a
+      // device with no camera all need different things from the operator.
+      const name = err instanceof DOMException ? err.name : "";
+      setError(
+        name === "NotAllowedError"
+          ? "رُفض إذن الكاميرا. افتح إعدادات الموقع في المتصفح واسمح بالكاميرا، ثم أعد المحاولة."
+          : name === "NotFoundError" || name === "OverconstrainedError"
+            ? "لم يُعثر على كاميرا في هذا الجهاز. استخدم الإدخال اليدوي بالأسفل."
+            : name === "NotReadableError"
+              ? "الكاميرا مشغولة بتطبيق آخر. أغلقه ثم أعد المحاولة."
+              : "تعذر فتح الكاميرا. استخدم الإدخال اليدوي بالأسفل."
+      );
       stop();
     }
   }
