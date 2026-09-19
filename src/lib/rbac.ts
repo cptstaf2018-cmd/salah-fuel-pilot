@@ -18,6 +18,7 @@ export const permissions = [
   "crisis:manage",
   "stations:read",
   "stations:manage",
+  "station-users:manage",
   "inventory:read",
   "inventory:adjust",
   "dispensing:verify",
@@ -38,6 +39,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     "crisis:manage",
     "stations:read",
     "stations:manage",
+    "station-users:manage",
     "inventory:read",
     "inventory:adjust",
     "dispensing:verify",
@@ -57,7 +59,17 @@ const rolePermissions: Record<Role, Permission[]> = {
   ],
   OPERATIONS_MANAGER: ["governorate:read", "stations:read", "inventory:read", "audit:read"],
   DISTRIBUTION_ADMIN: ["distribution:manage", "stations:read", "inventory:read", "inventory:adjust"],
-  STATION_MANAGER: ["stations:read", "inventory:read", "inventory:adjust", "dispensing:verify", "dispensing:confirm"],
+  // A station manager staffs his own gate: the employees he adds are the ones
+  // who open the scanner on their phones. The permission is scoped to his own
+  // stations by every route that checks it — it is not "users:manage".
+  STATION_MANAGER: [
+    "stations:read",
+    "station-users:manage",
+    "inventory:read",
+    "inventory:adjust",
+    "dispensing:verify",
+    "dispensing:confirm"
+  ],
   STATION_EMPLOYEE: ["dispensing:verify", "dispensing:confirm"],
   TANKER_OPERATOR: ["tankers:update"],
   CITIZEN: ["citizen:self"]

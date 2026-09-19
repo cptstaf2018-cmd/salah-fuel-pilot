@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Rail, type RailGroup } from "@/components/console/Rail";
 import { AdminConsole } from "./AdminConsole";
+import { EmployeeConsole } from "./EmployeeConsole";
 import { LoginCard } from "./LoginCard";
 import { StationConsole } from "./StationConsole";
+import { pilotRoleAccounts, type PilotRole } from "./roles";
 import type { Dashboard } from "./types";
 
 const adminRail = (pending: number): RailGroup[] => [
@@ -28,7 +30,7 @@ const adminRail = (pending: number): RailGroup[] => [
   }
 ];
 
-const stationRail: RailGroup[] = [
+const stationRail = (employees: number): RailGroup[] => [
   {
     title: "التشغيل",
     items: [
@@ -37,10 +39,25 @@ const stationRail: RailGroup[] = [
       { href: "#stock", label: "المخزون", icon: "⛽" },
       { href: "#movements", label: "الحركات", icon: "⇅" }
     ]
+  },
+  {
+    title: "الطاقم",
+    items: [{ href: "#employees", label: "موظفو المحطة", icon: "☰", count: employees }]
   }
 ];
 
-export function PilotDashboard({ role }: { role: "admin" | "station" }) {
+/** An employee has one job on this screen, so the rail has one entry. */
+const employeeRail: RailGroup[] = [
+  { title: "التشغيل", items: [{ href: "#dispense", label: "مسح رمز السائق", icon: "◈" }] }
+];
+
+const roleLabels: Record<PilotRole, string> = {
+  admin: "سوبر أدمن",
+  station: "مدير محطة",
+  employee: "موظف محطة"
+};
+
+export function PilotDashboard({ role }: { role: PilotRole }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -51,7 +68,7 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
   const [vehicleFuel, setVehicleFuel] = useState("");
   const [vehicleStatus, setVehicleStatus] = useState("");
 
-  const expectedRole = role === "admin" ? "SUPER_ADMIN" : "STATION_MANAGER";
+  const expectedRole = pilotRoleAccounts[role];
 
   const load = useCallback(async () => {
     try {
@@ -164,7 +181,9 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
       setNotice(
         result.station
           ? "تمت إضافة المحطة."
-          : `تم إنشاء قاعدة الأزمة وتخصيص ${result.allocation?.allocated ?? 0} مركبة.`
+          : result.employee
+            ? `تمت إضافة الموظف ${result.employee.name}. يدخل من /pilot/employee برقم هاتفه.`
+            : `تم إنشاء قاعدة الأزمة وتخصيص ${result.allocation?.allocated ?? 0} مركبة.`
       );
       await load();
       return true;
@@ -290,10 +309,16 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
   return (
     <div className="console" id="top">
       <Rail
-        groups={role === "admin" ? adminRail(pending) : stationRail}
+        groups={
+          role === "admin"
+            ? adminRail(pending)
+            : role === "station"
+              ? stationRail(data.stationEmployees.length)
+              : employeeRail
+        }
         currentHref="#top"
         userName={data.user.name}
-        roleLabel={role === "admin" ? "سوبر أدمن" : "صاحب محطة"}
+        roleLabel={roleLabels[role]}
       />
 
       <main className="console-main stage">
@@ -334,13 +359,23 @@ export function PilotDashboard({ role }: { role: "admin" | "station" }) {
             onCreate={create}
             onMutate={mutate}
           />
-        ) : (
+        ) : role === "station" ? (
           <StationConsole
             data={data}
             busy={busy}
             stationId={stationId}
             onStationChange={setStationId}
             onReceive={receive}
+            onDispense={dispense}
+            onCreate={create}
+            onMutate={mutate}
+          />
+        ) : (
+          <EmployeeConsole
+            data={data}
+            busy={busy}
+            stationId={stationId}
+            onStationChange={setStationId}
             onDispense={dispense}
           />
         )}

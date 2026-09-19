@@ -1,16 +1,11 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import type { FormEvent } from "react";
 import { Kpi } from "@/components/console/Kpi";
 import { StationStrip, type StationRow } from "@/components/console/StationStrip";
-import { QrScanner } from "@/components/ui/QrScanner";
+import { DispensePanel, type DispenseOutcome } from "./DispensePanel";
+import { StationEmployeesPanel } from "./StationEmployeesPanel";
 import { formatCount, formatLiters } from "@/lib/stock";
 import type { Dashboard } from "./types";
-
-type DispenseOutcome = {
-  tone: "ok" | "critical";
-  title: string;
-  detail?: { plate: string; owner: string; fuel: string; liters: number; remaining: number };
-};
 
 type StationConsoleProps = {
   data: Dashboard;
@@ -19,12 +14,12 @@ type StationConsoleProps = {
   onStationChange: (id: string) => void;
   onReceive: (event: FormEvent<HTMLFormElement>) => void;
   onDispense: (qrPayload: string, liters?: number) => Promise<DispenseOutcome>;
+  onCreate: (url: string, body: unknown) => Promise<boolean>;
+  onMutate: (url: string, method: "PATCH" | "DELETE", body?: unknown) => Promise<boolean>;
 };
 
 export function StationConsole(props: StationConsoleProps) {
   const { data, busy, stationId } = props;
-  const [outcome, setOutcome] = useState<DispenseOutcome | null>(null);
-  const [scannedPayload, setScannedPayload] = useState("");
   const station = data.stations.find((item) => item.id === stationId);
 
   const stationRows: StationRow[] = data.stations.map((item) => ({
@@ -45,24 +40,6 @@ export function StationConsole(props: StationConsoleProps) {
       sum + item.fuelInventory.reduce((inner, fuel) => inner + Number(fuel.quantityLiters), 0),
     0
   );
-
-  async function dispense(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const litersRaw = String(data.get("liters") ?? "").trim();
-
-    const result = await props.onDispense(
-      String(data.get("qrPayload") ?? "").trim(),
-      litersRaw ? Number(litersRaw) : undefined
-    );
-
-    setOutcome(result);
-    if (result.tone === "ok") {
-      form.reset();
-      setScannedPayload("");
-    }
-  }
 
   return (
     <>
@@ -87,73 +64,16 @@ export function StationConsole(props: StationConsoleProps) {
           unit="لتر"
           note={`${formatCount(data.dispensedToday.count)} مركبة`}
         />
+        <Kpi
+          label="موظفو المحطة"
+          value={formatCount(data.stationEmployees.filter((item) => item.status === "ACTIVE").length)}
+          unit="فعّال"
+          note={`من ${formatCount(data.stationEmployees.length)}`}
+        />
       </section>
 
       {/* First panel on the page: at a pump this is the only screen that matters. */}
-      <section className="panel" id="dispense">
-        <div className="panel-head">
-          <div>
-            <h2>صرف حصة مواطن</h2>
-            <p>امسح رمز QR الخاص بالمركبة · يُخصم المخزون تلقائياً عند التأكيد</p>
-          </div>
-        </div>
-        <div className="panel-body">
-          {outcome && (
-            <p className="banner" data-tone={outcome.tone} role="status" style={{ marginBottom: "var(--s4)" }}>
-              <strong>{outcome.title}</strong>
-            </p>
-          )}
-
-          {outcome?.detail && (
-            <div className="scan-result" style={{ marginBottom: "var(--s4)" }}>
-              <dl>
-                <dt>المواطن</dt>
-                <dd>{outcome.detail.owner}</dd>
-                <dt>اللوحة</dt>
-                <dd>{outcome.detail.plate}</dd>
-                <dt>الوقود</dt>
-                <dd>{outcome.detail.fuel}</dd>
-                <dt>الكمية المصروفة</dt>
-                <dd>{formatLiters(outcome.detail.liters)} لتر</dd>
-                <dt>الرصيد المتبقي</dt>
-                <dd>{formatLiters(outcome.detail.remaining)} لتر</dd>
-              </dl>
-            </div>
-          )}
-
-          <QrScanner
-            onResult={(payload) => {
-              setScannedPayload(payload);
-              setOutcome(null);
-            }}
-          />
-
-          <p className="scanner-divider">أو أدخل الرمز يدوياً</p>
-
-          <form className="scan-form" onSubmit={dispense}>
-            <label className="field">
-              <span>رمز QR للمركبة</span>
-              <input
-                name="qrPayload"
-                required
-                minLength={32}
-                maxLength={256}
-                autoComplete="off"
-                placeholder="امسح الرمز أو ألصقه هنا"
-                value={scannedPayload}
-                onChange={(event) => setScannedPayload(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>الكمية باللتر — اتركها فارغة لصرف الحصة كاملة</span>
-              <input name="liters" type="number" min="0.001" max="500" step="0.001" />
-            </label>
-            <button className="btn btn-primary" disabled={busy}>
-              {busy ? "جارٍ التأكيد…" : "تأكيد الصرف"}
-            </button>
-          </form>
-        </div>
-      </section>
+      <DispensePanel busy={busy} onDispense={props.onDispense} />
 
       <section className="panel" id="receive">
         <div className="panel-head">
@@ -201,6 +121,14 @@ export function StationConsole(props: StationConsoleProps) {
           </form>
         </div>
       </section>
+
+      <StationEmployeesPanel
+        employees={data.stationEmployees}
+        stations={data.stations}
+        busy={busy}
+        onCreate={props.onCreate}
+        onMutate={props.onMutate}
+      />
 
       <section className="panel" id="stock">
         <div className="panel-head">

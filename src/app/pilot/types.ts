@@ -67,6 +67,17 @@ export type DashboardCrisisRule = {
   _count: { stations: number; allocations: number };
 };
 
+/** An employee the station manager added, as his console lists them. */
+export type StationEmployee = {
+  id: string;
+  name: string;
+  phone: string | null;
+  status: string;
+  lastLoginAt: string | null;
+  stationId: string;
+  stationName: string;
+};
+
 export type DashboardGovernorate = {
   id: string;
   nameAr: string;
@@ -108,6 +119,8 @@ export type Dashboard = {
   }[];
   crisisRules: DashboardCrisisRule[];
   servedToday: number;
+  /** Populated for a station manager only; empty for every other role. */
+  stationEmployees: StationEmployee[];
   governorates: DashboardGovernorate[];
   fuelTypes: DashboardFuelType[];
   dispensedToday: { liters: number; count: number };
@@ -148,5 +161,9 @@ export const auditLabels: Record<string, string> = {
   VEHICLE_DELETED: "حذف مركبة",
   MANUAL_INVENTORY_ADJUSTMENT: "تعديل مخزون يدوي",
   NATIONAL_ID_UPLOADED: "رفع بطاقة وطنية",
-  PERMISSION_DENIED: "رفض صلاحية"
+  PERMISSION_DENIED: "رفض صلاحية",
+  STATION_EMPLOYEE_CREATED: "إضافة موظف محطة",
+  STATION_EMPLOYEE_UPDATED: "تعديل موظف محطة",
+  STATION_EMPLOYEE_RETIRED: "إيقاف موظف محطة",
+  STATION_EMPLOYEE_DELETED: "حذف موظف محطة"
 };

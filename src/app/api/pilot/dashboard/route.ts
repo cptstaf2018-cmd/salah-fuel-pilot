@@ -5,7 +5,10 @@ import { AppointmentStatus, VehicleRegistrationStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser(request);
-  if (!user || !["SUPER_ADMIN", "STATION_MANAGER"].includes(user.role)) return NextResponse.json({ error: "سجل الدخول بحساب الإدارة أو المحطة." }, { status: 401 });
+  // Station employees reach the same endpoint from their phones: the station
+  // scoping below already limits them to where they work, and the admin-only
+  // blocks stay empty for them.
+  if (!user || !["SUPER_ADMIN", "STATION_MANAGER", "STATION_EMPLOYEE"].includes(user.role)) return NextResponse.json({ error: "سجل الدخول بحساب الإدارة أو المحطة." }, { status: 401 });
   const admin = user.role === "SUPER_ADMIN";
   const vehiclesPage = Math.max(1, Number(request.nextUrl.searchParams.get("vehiclesPage") || 1));
   const vehiclesPageSize = Math.min(100, Math.max(10, Number(request.nextUrl.searchParams.get("vehiclesPageSize") || 50)));
@@ -68,6 +71,8 @@ export async function GET(request: NextRequest) {
   // Only dispensing moves fuel out, so today's handover total is the sum of
   // those movements — the figure that proves the loop is actually closing.
   const servedToday = admin ? await prisma.appointment.count({ where: { dispensedAt: { gte: startOfToday } } }) : 0;
+  // Only the manager staffs his own gate, so only his console carries the list.
+  const stationEmployeeLinks = user.role === "STATION_MANAGER" ? await prisma.stationUser.findMany({ where: { stationId: { in: stationIds }, user: { role: "STATION_EMPLOYEE" } }, include: { user: { select: { id: true, name: true, phone: true, status: true, lastLoginAt: true } }, station: { select: { nameAr: true } } }, orderBy: { createdAt: "desc" } }) : [];
   const dispensedToday = await prisma.inventoryTransaction.aggregate({ where: { stationId: { in: stationIds }, type: "DISPENSING", createdAt: { gte: startOfToday } }, _sum: { quantityChange: true }, _count: { _all: true } });
   const fuelNames = new Map(stations.flatMap((station) => station.fuelInventory.map((item) => [item.fuelTypeId, item.fuelType.nameAr])));
   return NextResponse.json({
@@ -85,6 +90,7 @@ export async function GET(request: NextRequest) {
     fuelTypes,
     crisisRules,
     servedToday,
+    stationEmployees: stationEmployeeLinks.map((link) => ({ ...link.user, stationId: link.stationId, stationName: link.station.nameAr })),
     dispensedToday: {
       liters: Math.abs(dispensedToday._sum.quantityChange?.toNumber() ?? 0),
       count: dispensedToday._count._all
