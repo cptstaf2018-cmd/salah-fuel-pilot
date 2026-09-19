@@ -19,8 +19,25 @@ type RegistrationResult = {
     payload: string;
     svg: string;
   };
-  appointment?: { stationName: string; fuelName: string; quotaLiters: string; startsAt: string; endsAt: string } | null;
+  appointment?: {
+    status: string;
+    stationName: string;
+    fuelName: string;
+    quotaLiters: string;
+    startsAt: string;
+    endsAt: string;
+    dispensedAt: string | null;
+    dispensedLiters: string | null;
+    cooldownHours: number;
+  } | null;
 };
+
+const at = (value: string) => new Date(value).toLocaleString("ar-IQ");
+
+/** When this vehicle becomes eligible again, per its rule's cooldown. */
+function eligibleAgainAt(dispensedAt: string, cooldownHours: number): string {
+  return at(new Date(new Date(dispensedAt).getTime() + cooldownHours * 3600_000).toISOString());
+}
 
 const vehicleTypes = [
   ["PRIVATE_CAR", "سيارة خصوصي"],
@@ -192,10 +209,51 @@ export function RegisterVehicleForm() {
               </div>
               <div>
                 <dt>حالة التسجيل</dt>
-                <dd>بانتظار التخصيص</dd>
+                {/* Derived, not fixed text. This used to read "بانتظار التخصيص"
+                    even while the panel below it announced an allocation. */}
+                <dd>
+                  {result.appointment?.dispensedAt
+                    ? "تم التجهيز"
+                    : result.appointment
+                      ? "تم تخصيص حصتك"
+                      : "بانتظار التخصيص"}
+                </dd>
               </div>
             </dl>
-            {result.appointment ? <div className="citizen-allocation-message" role="status"><strong>تم تخصيص حصتك</strong><p>{result.appointment.quotaLiters} لتر {result.appointment.fuelName}</p><p>المحطة: {result.appointment.stationName}</p><p>الموعد: {new Date(result.appointment.startsAt).toLocaleString("ar-IQ")} إلى {new Date(result.appointment.endsAt).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" })}</p></div> : <p className="allocation-pending">بانتظار تخصيص المحطة والموعد من الإدارة. ستتحدث الصفحة تلقائياً.</p>}
+            {result.appointment?.dispensedAt ? (
+              <div className="citizen-allocation-message citizen-served" role="status">
+                <strong>تم تجهيز حصتك</strong>
+                <p>
+                  {result.appointment.dispensedLiters ?? result.appointment.quotaLiters} لتر{" "}
+                  {result.appointment.fuelName}
+                </p>
+                <p>المحطة: {result.appointment.stationName}</p>
+                <p>وقت التجهيز: {at(result.appointment.dispensedAt)}</p>
+                <p className="citizen-eligibility">
+                  رمز QR لا يصلح للصرف مرة أخرى. تعود مؤهلاً في{" "}
+                  {eligibleAgainAt(result.appointment.dispensedAt, result.appointment.cooldownHours)}
+                </p>
+              </div>
+            ) : result.appointment ? (
+              <div className="citizen-allocation-message" role="status">
+                <strong>تم تخصيص حصتك</strong>
+                <p>
+                  {result.appointment.quotaLiters} لتر {result.appointment.fuelName}
+                </p>
+                <p>المحطة: {result.appointment.stationName}</p>
+                <p>
+                  الموعد: {at(result.appointment.startsAt)} إلى{" "}
+                  {new Date(result.appointment.endsAt).toLocaleTimeString("ar-IQ", {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  })}
+                </p>
+              </div>
+            ) : (
+              <p className="allocation-pending">
+                بانتظار تخصيص المحطة والموعد من الإدارة. ستتحدث الصفحة تلقائياً.
+              </p>
+            )}
           </>
         ) : (
           <>

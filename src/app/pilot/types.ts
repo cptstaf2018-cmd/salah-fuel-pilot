@@ -17,7 +17,42 @@ export type DashboardVehicle = {
   owner: { fullName: string };
   fuelType: { nameAr: string };
   registrationStatus: string;
+  /** Most recent appointment; its state is what the console actually shows. */
+  appointments: {
+    status: string;
+    dispensedAt: string | null;
+    dispensedLiters: string | null;
+    station: { nameAr: string };
+  }[];
 };
+
+/**
+ * What to show a citizen as, derived from their latest appointment rather than
+ * from registrationStatus. The appointment holds the truth — when fuel was
+ * handed over, where, and how much — and deriving avoids a second enum that
+ * could disagree with it.
+ */
+export function describeCitizen(vehicle: DashboardVehicle): {
+  label: string;
+  state: "ok" | "warn" | "critical" | "info" | "idle";
+  servedAt: string | null;
+} {
+  if (vehicle.registrationStatus === "SUSPENDED" || vehicle.registrationStatus === "REJECTED") {
+    return { ...registrationLabels[vehicle.registrationStatus], servedAt: null };
+  }
+
+  const latest = vehicle.appointments[0];
+
+  if (latest?.dispensedAt) {
+    return { label: "تم التجهيز", state: "ok", servedAt: latest.dispensedAt };
+  }
+
+  if (latest && (latest.status === "SCHEDULED" || latest.status === "READY")) {
+    return { label: "مخصَّص · بانتظار التجهيز", state: "info", servedAt: null };
+  }
+
+  return { label: "بانتظار التخصيص", state: "warn", servedAt: null };
+}
 
 export type DashboardCrisisRule = {
   id: string;
@@ -72,6 +107,7 @@ export type Dashboard = {
     actor: { name: string } | null;
   }[];
   crisisRules: DashboardCrisisRule[];
+  servedToday: number;
   governorates: DashboardGovernorate[];
   fuelTypes: DashboardFuelType[];
   dispensedToday: { liters: number; count: number };

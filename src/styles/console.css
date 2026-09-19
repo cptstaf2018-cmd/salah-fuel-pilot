@@ -781,8 +781,19 @@ tr:focus-within .row-actions {
 /* Responsive                                                                 */
 /* ========================================================================== */
 
+.kpi-band-5 {
+  grid-template-columns: 2fr repeat(4, 1fr);
+}
+
+@media (max-width: 1280px) {
+  .kpi-band-5 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 1100px) {
-  .kpi-band {
+  .kpi-band,
+  .kpi-band-5 {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -1107,4 +1118,120 @@ tr:focus-within .row-actions {
   height: 13px;
   margin: 0;
   accent-color: var(--brand);
+}
+
+/* ========================================================================== */
+/* QR scanner                                                                 */
+/* ========================================================================== */
+
+.scanner {
+  display: grid;
+  gap: var(--s3);
+}
+
+.scanner-stage {
+  display: grid;
+  position: relative;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface);
+  background: var(--chrome);
+  overflow: hidden;
+}
+
+.scanner-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Hidden until the stream starts, so the element is not a black rectangle. */
+  opacity: 0;
+  transition: opacity var(--normal) var(--ease);
+}
+
+.scanner-stage[data-active="true"] video {
+  opacity: 1;
+}
+
+.scanner-hint {
+  position: absolute;
+  max-width: 28ch;
+  margin: 0;
+  padding: 0 var(--s4);
+  color: var(--chrome-ink-dim);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-align: center;
+}
+
+/* A frame to aim with, rather than asking the operator to guess where to hold
+   the phone. Corners only: a full box hides more of the picture than it helps. */
+.scanner-reticle {
+  position: absolute;
+  width: min(62%, 240px);
+  aspect-ratio: 1;
+  border: 2px solid var(--gold);
+  border-radius: var(--radius-surface);
+  box-shadow: 0 0 0 100vmax oklch(24% 0.03 155 / 0.45);
+  clip-path: polygon(
+    0 0, 28% 0, 28% 4%, 4% 4%, 4% 28%, 0 28%,
+    0 72%, 4% 72%, 4% 96%, 28% 96%, 28% 100%, 0 100%,
+    100% 100%, 72% 100%, 72% 96%, 96% 96%, 96% 72%, 100% 72%,
+    100% 28%, 96% 28%, 96% 4%, 72% 4%, 72% 0, 100% 0
+  );
+}
+
+.scanner-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.scanner-divider::before,
+.scanner-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  content: "";
+}
+
+/* A detail panel carries a table, so it needs more room than a confirm prompt. */
+.dialog-wide {
+  max-width: min(780px, calc(100vw - 2 * var(--s4)));
+}
+
+.dialog-wide .table {
+  min-width: 520px;
+}
+
+/* The citizen's name is the way into their record, so it has to look like a
+   control rather than plain text in the cell. */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-weight: 700;
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color var(--fast) var(--ease);
+}
+
+.link-button:hover,
+.link-button:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+.cell-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }

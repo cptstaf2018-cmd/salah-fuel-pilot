@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { Kpi } from "@/components/console/Kpi";
 import { StationStrip, type StationRow } from "@/components/console/StationStrip";
+import { QrScanner } from "@/components/ui/QrScanner";
 import { formatCount, formatLiters } from "@/lib/stock";
 import type { Dashboard } from "./types";
 
@@ -23,6 +24,7 @@ type StationConsoleProps = {
 export function StationConsole(props: StationConsoleProps) {
   const { data, busy, stationId } = props;
   const [outcome, setOutcome] = useState<DispenseOutcome | null>(null);
+  const [scannedPayload, setScannedPayload] = useState("");
   const station = data.stations.find((item) => item.id === stationId);
 
   const stationRows: StationRow[] = data.stations.map((item) => ({
@@ -56,7 +58,10 @@ export function StationConsole(props: StationConsoleProps) {
     );
 
     setOutcome(result);
-    if (result.tone === "ok") form.reset();
+    if (result.tone === "ok") {
+      form.reset();
+      setScannedPayload("");
+    }
   }
 
   return (
@@ -116,6 +121,15 @@ export function StationConsole(props: StationConsoleProps) {
             </div>
           )}
 
+          <QrScanner
+            onResult={(payload) => {
+              setScannedPayload(payload);
+              setOutcome(null);
+            }}
+          />
+
+          <p className="scanner-divider">أو أدخل الرمز يدوياً</p>
+
           <form className="scan-form" onSubmit={dispense}>
             <label className="field">
               <span>رمز QR للمركبة</span>
@@ -126,6 +140,8 @@ export function StationConsole(props: StationConsoleProps) {
                 maxLength={256}
                 autoComplete="off"
                 placeholder="امسح الرمز أو ألصقه هنا"
+                value={scannedPayload}
+                onChange={(event) => setScannedPayload(event.target.value)}
               />
             </label>
             <label className="field">

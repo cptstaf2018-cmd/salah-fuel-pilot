@@ -25,10 +25,38 @@ export async function GET(request: NextRequest) {
     const scanned = await verifyVehicleQr(qrPayload);
     if (!scanned) return NextResponse.json({ error: "رمز المركبة غير صالح." }, { status: 401 });
 
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: scanned.id }, include: { fuelType: true, appointments: { where: { status: "SCHEDULED" }, orderBy: { createdAt: "desc" }, take: 1, include: { station: true, timeSlot: true } } } });
+    // The latest appointment whatever its state. Filtering to SCHEDULED meant
+    // the card vanished the moment fuel was handed over, leaving the citizen
+    // looking at an empty panel instead of a record of being served.
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: scanned.id },
+      include: {
+        fuelType: true,
+        appointments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: { station: true, timeSlot: true, crisisRule: { select: { cooldownHours: true } } }
+        }
+      }
+    });
     if (!vehicle) return NextResponse.json({ error: "المركبة غير موجودة." }, { status: 404 });
+
     const appointment = vehicle.appointments[0];
-    return NextResponse.json({ appointment: appointment ? { stationName: appointment.station.nameAr, fuelName: vehicle.fuelType.nameAr, quotaLiters: appointment.quotaLiters.toString(), startsAt: appointment.timeSlot.startsAt.toISOString(), endsAt: appointment.timeSlot.endsAt.toISOString() } : null });
+    return NextResponse.json({
+      appointment: appointment
+        ? {
+            status: appointment.status,
+            stationName: appointment.station.nameAr,
+            fuelName: vehicle.fuelType.nameAr,
+            quotaLiters: appointment.quotaLiters.toString(),
+            startsAt: appointment.timeSlot.startsAt.toISOString(),
+            endsAt: appointment.timeSlot.endsAt.toISOString(),
+            dispensedAt: appointment.dispensedAt?.toISOString() ?? null,
+            dispensedLiters: appointment.dispensedLiters?.toString() ?? null,
+            cooldownHours: appointment.crisisRule.cooldownHours
+          }
+        : null
+    });
   }
   const user = await getAuthenticatedUser(request);
 

@@ -592,3 +592,19 @@ nav {
     grid-template-columns: 1fr;
   }
 }
+
+/* A served citizen gets a distinct, calmer treatment than a pending
+   allocation: the action is finished, so it reads as a receipt. */
+.citizen-served {
+  border-right-color: #1f6a49;
+  background: #eef7f1;
+}
+
+.citizen-eligibility {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #cfe3d7;
+  color: #607066;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}

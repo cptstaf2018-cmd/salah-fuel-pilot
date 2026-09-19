@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth/current-user";
-import { VehicleRegistrationStatus } from "@prisma/client";
+import { AppointmentStatus, VehicleRegistrationStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser(request);
@@ -14,7 +14,40 @@ export async function GET(request: NextRequest) {
   const vehicleStatus = request.nextUrl.searchParams.get("vehicleStatus") || "";
   const stations = await prisma.station.findMany({ where: admin ? {} : { stationUsers: { some: { userId: user.id } } }, include: { fuelInventory: { include: { fuelType: true } } }, orderBy: { code: "asc" } });
   const stationIds = stations.map((station) => station.id);
-  const vehicleWhere = admin ? { ...(vehicleSearch ? { OR: [{ plateNumber: { contains: vehicleSearch, mode: "insensitive" as const } }, { owner: { fullName: { contains: vehicleSearch, mode: "insensitive" as const } } }] } : {}), ...(vehicleFuel ? { fuelTypeId: vehicleFuel } : {}), ...(vehicleStatus && Object.values(VehicleRegistrationStatus).includes(vehicleStatus as VehicleRegistrationStatus) ? { registrationStatus: vehicleStatus as VehicleRegistrationStatus } : {}) } : undefined;
+  // Two of the filter values describe where a citizen is in the handover cycle
+  // rather than their registration record, so they filter on appointments. The
+  // console derives the same distinction for display; this keeps the two in step.
+  const servingFilter =
+    vehicleStatus === "SERVED"
+      ? { appointments: { some: { dispensedAt: { not: null } } } }
+      : vehicleStatus === "AWAITING_DISPENSE"
+        ? {
+            appointments: {
+              some: { dispensedAt: null, status: { in: [AppointmentStatus.SCHEDULED, AppointmentStatus.READY] } }
+            }
+          }
+        : {};
+
+  const registrationFilter =
+    vehicleStatus && Object.values(VehicleRegistrationStatus).includes(vehicleStatus as VehicleRegistrationStatus)
+      ? { registrationStatus: vehicleStatus as VehicleRegistrationStatus }
+      : {};
+
+  const vehicleWhere = admin
+    ? {
+        ...(vehicleSearch
+          ? {
+              OR: [
+                { plateNumber: { contains: vehicleSearch, mode: "insensitive" as const } },
+                { owner: { fullName: { contains: vehicleSearch, mode: "insensitive" as const } } }
+              ]
+            }
+          : {}),
+        ...(vehicleFuel ? { fuelTypeId: vehicleFuel } : {}),
+        ...registrationFilter,
+        ...servingFilter
+      }
+    : undefined;
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -24,7 +57,7 @@ export async function GET(request: NextRequest) {
   // until Prisma gave up with P2024 — the dashboard's "تعذر تحديث البيانات".
   // With one connection there is nothing to win by running them concurrently.
   const transactions = await prisma.inventoryTransaction.findMany({ where: { stationId: { in: stationIds } }, include: { station: true, fuelType: true, actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 50 });
-  const vehicles = admin ? await prisma.vehicle.findMany({ where: vehicleWhere, include: { owner: true, fuelType: true }, orderBy: { createdAt: "desc" }, skip: (vehiclesPage - 1) * vehiclesPageSize, take: vehiclesPageSize }) : [];
+  const vehicles = admin ? await prisma.vehicle.findMany({ where: vehicleWhere, include: { owner: true, fuelType: true, appointments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, dispensedAt: true, dispensedLiters: true, station: { select: { nameAr: true } } } } }, orderBy: { createdAt: "desc" }, skip: (vehiclesPage - 1) * vehiclesPageSize, take: vehiclesPageSize }) : [];
   const vehiclesTotal = admin ? await prisma.vehicle.count({ where: vehicleWhere }) : 0;
   const vehicleFuelSummary = admin ? await prisma.vehicle.groupBy({ by: ["fuelTypeId"], _count: { _all: true } }) : [];
   const vehicleStatusSummary = admin ? await prisma.vehicle.groupBy({ by: ["registrationStatus"], _count: { _all: true } }) : [];
@@ -34,6 +67,7 @@ export async function GET(request: NextRequest) {
   const crisisRules = await prisma.crisisRule.findMany({ where: { status: { in: ["ACTIVE", "PAUSED"] } }, include: { fuelType: { select: { nameAr: true } }, _count: { select: { stations: true, allocations: true } } }, orderBy: { createdAt: "desc" } });
   // Only dispensing moves fuel out, so today's handover total is the sum of
   // those movements — the figure that proves the loop is actually closing.
+  const servedToday = admin ? await prisma.appointment.count({ where: { dispensedAt: { gte: startOfToday } } }) : 0;
   const dispensedToday = await prisma.inventoryTransaction.aggregate({ where: { stationId: { in: stationIds }, type: "DISPENSING", createdAt: { gte: startOfToday } }, _sum: { quantityChange: true }, _count: { _all: true } });
   const fuelNames = new Map(stations.flatMap((station) => station.fuelInventory.map((item) => [item.fuelTypeId, item.fuelType.nameAr])));
   return NextResponse.json({
@@ -50,6 +84,7 @@ export async function GET(request: NextRequest) {
     governorates,
     fuelTypes,
     crisisRules,
+    servedToday,
     dispensedToday: {
       liters: Math.abs(dispensedToday._sum.quantityChange?.toNumber() ?? 0),
       count: dispensedToday._count._all

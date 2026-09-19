@@ -42,6 +42,16 @@ export type EvaluateDispenseResult =
   | { ok: false; reason: DispenseRefusal };
 
 /**
+ * Context attached to a refusal so the station screen can answer the citizen
+ * rather than only turning them away: when they were served, and when the
+ * cooldown lets them return.
+ */
+export type RefusalContext = {
+  dispensedAt?: Date | null;
+  cooldownHours?: number;
+};
+
+/**
  * Decides whether fuel may be handed over, with no database access, so the
  * policy can be tested directly. The caller still performs the write under a
  * conditional update — this function cannot see a concurrent dispense.
@@ -108,7 +118,7 @@ export type ConfirmDispenseResult =
       fuelName: string;
       remainingLiters: number;
     }
-  | { ok: false; reason: DispenseRefusal | DispenseLookupRefusal };
+  | ({ ok: false; reason: DispenseRefusal | DispenseLookupRefusal } & RefusalContext);
 
 type ConfirmDispenseInput = {
   qrPayload: string;
@@ -200,7 +210,17 @@ export async function confirmDispense(input: ConfirmDispenseInput): Promise<Conf
       vehicleId: vehicle.id,
       stationId: input.stationId
     });
-    return verdict;
+
+    return {
+      ...verdict,
+      // ALREADY_DISPENSED reads off this appointment; WITHIN_COOLDOWN reads off
+      // whichever earlier appointment actually served the vehicle.
+      dispensedAt:
+        verdict.reason === "ALREADY_DISPENSED"
+          ? appointment.dispensedAt
+          : (lastServed?.dispensedAt ?? null),
+      cooldownHours: appointment.crisisRule.cooldownHours
+    };
   }
 
   const { liters } = verdict;
@@ -277,7 +297,16 @@ export async function confirmDispense(input: ConfirmDispenseInput): Promise<Conf
   } catch (error) {
     if (error instanceof DispenseRaceError) {
       await audit("DENIED", { reason: "RACE_LOST", appointmentId: appointment.id });
-      return { ok: false, reason: "ALREADY_DISPENSED" };
+      const claimed = await prisma.appointment.findUnique({
+        where: { id: appointment.id },
+        select: { dispensedAt: true }
+      });
+      return {
+        ok: false,
+        reason: "ALREADY_DISPENSED",
+        dispensedAt: claimed?.dispensedAt ?? null,
+        cooldownHours: appointment.crisisRule.cooldownHours
+      };
     }
 
     if (error instanceof DispenseStockError) {

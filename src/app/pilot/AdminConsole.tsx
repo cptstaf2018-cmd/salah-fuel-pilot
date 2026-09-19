@@ -7,9 +7,11 @@ import { EditDialog } from "@/components/ui/EditDialog";
 import { Pill } from "@/components/ui/Pill";
 import { CrisisRuleDialog } from "./CrisisRuleDialog";
 import { StationCreateDialog } from "./StationCreateDialog";
+import { VehicleDetailDialog } from "./VehicleDetailDialog";
 import { formatCount, formatLiters } from "@/lib/stock";
 import {
   auditLabels,
+  describeCitizen,
   registrationLabels,
   type Dashboard,
   type DashboardStation,
@@ -63,6 +65,7 @@ export function AdminConsole(props: AdminConsoleProps) {
   const [dialogError, setDialogError] = useState("");
   const [addingStation, setAddingStation] = useState(false);
   const [addingRule, setAddingRule] = useState(false);
+  const [detailVehicleId, setDetailVehicleId] = useState<string | null>(null);
 
   const totalLiters = data.stations.reduce(
     (sum, station) =>
@@ -141,7 +144,7 @@ export function AdminConsole(props: AdminConsoleProps) {
         </div>
       </header>
 
-      <section className="kpi-band" aria-label="المؤشرات الرئيسية">
+      <section className="kpi-band kpi-band-5" aria-label="المؤشرات الرئيسية">
         <Kpi
           hero
           label="المخزون الكلي"
@@ -154,6 +157,12 @@ export function AdminConsole(props: AdminConsoleProps) {
           value={formatLiters(data.dispensedToday.liters)}
           unit="لتر"
           note={`${formatCount(data.dispensedToday.count)} عملية صرف`}
+        />
+        <Kpi
+          label="جُهّز اليوم"
+          value={formatCount(data.servedToday)}
+          unit="مركبة"
+          note={`${formatLiters(data.dispensedToday.liters)} لتر`}
         />
         <Kpi
           label="بانتظار التخصيص"
@@ -345,6 +354,8 @@ export function AdminConsole(props: AdminConsoleProps) {
               onChange={(event) => props.onVehicleStatus(event.target.value)}
             >
               <option value="">كل الحالات</option>
+              <option value="SERVED">تم التجهيز</option>
+              <option value="AWAITING_DISPENSE">مخصَّص · بانتظار التجهيز</option>
               {data.vehicleSummary.byStatus.map((item) => (
                 <option key={item.status} value={item.status}>
                   {registrationLabels[item.status]?.label ?? item.status}
@@ -363,23 +374,38 @@ export function AdminConsole(props: AdminConsoleProps) {
                   <th>اللوحة</th>
                   <th>الوقود</th>
                   <th>الحالة</th>
+                  <th>جُهّز في</th>
                   <th className="col-actions">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
                 {data.vehicles.map((vehicle) => {
-                  const status = registrationLabels[vehicle.registrationStatus] ?? {
-                    label: vehicle.registrationStatus,
-                    state: "idle" as const
-                  };
+                  // Derived from the latest appointment, so a citizen who has
+                  // been handed fuel reads as served rather than still waiting.
+                  const status = describeCitizen(vehicle);
 
                   return (
                     <tr key={vehicle.id}>
-                      <td>{vehicle.owner.fullName}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => setDetailVehicleId(vehicle.id)}
+                        >
+                          {vehicle.owner.fullName}
+                        </button>
+                      </td>
                       <td className="num">{vehicle.plateNumber}</td>
                       <td>{vehicle.fuelType.nameAr}</td>
                       <td>
                         <Pill state={status.state}>{status.label}</Pill>
+                      </td>
+                      <td>
+                        {status.servedAt ? (
+                          new Date(status.servedAt).toLocaleString("ar-IQ")
+                        ) : (
+                          <span style={{ color: "var(--ink-faint)" }}>—</span>
+                        )}
                       </td>
                       <td className="col-actions">
                         <span className="row-actions">
@@ -557,6 +583,11 @@ export function AdminConsole(props: AdminConsoleProps) {
           if (ok) setAddingRule(false);
           return ok;
         }}
+      />
+
+      <VehicleDetailDialog
+        vehicleId={detailVehicleId}
+        onDismiss={() => setDetailVehicleId(null)}
       />
 
       <ConfirmDialog request={confirm} busy={busy} onDismiss={() => setConfirm(null)} />

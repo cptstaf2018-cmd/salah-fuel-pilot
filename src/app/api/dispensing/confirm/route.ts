@@ -8,16 +8,36 @@ import { confirmDispenseSchema } from "@/lib/validation/vehicles";
 const refusalMessages: Record<string, string> = {
   VEHICLE_NOT_FOUND: "رمز QR غير صالح أو ملغى. اطلب من المواطن فتح صفحة مركبته من جديد.",
   NO_APPOINTMENT: "لا يوجد موعد مخصص لهذه المركبة بعد. لم تُخصَّص لها حصة.",
-  ALREADY_DISPENSED: "تم صرف هذه الحصة مسبقاً. لا يمكن صرفها مرة أخرى.",
+  ALREADY_DISPENSED: "تم صرف هذه الحصة مسبقاً.",
   APPOINTMENT_NOT_ACTIVE: "الموعد ملغى أو منتهٍ. راجع الإدارة.",
   WRONG_STATION: "موعد هذه المركبة في محطة أخرى. لا يمكن الصرف هنا.",
   RULE_ENDED: "انتهت مدة قرار الأزمة. لا يمكن الصرف بموجبه.",
   TOO_EARLY: "لم يبدأ موعد هذه المركبة بعد. اطلب منها العودة في وقتها.",
   WITHIN_COOLDOWN: "هذه المركبة استلمت حصتها مؤخراً ولم تنقضِ مدة المنع بعد.",
+
   INVALID_QUANTITY: "أدخل كمية صحيحة أكبر من صفر.",
   ABOVE_QUOTA: "الكمية المطلوبة تتجاوز الحصة المخصصة لهذه المركبة.",
   INSUFFICIENT_STOCK: "مخزون المحطة لا يكفي لهذه الحصة."
 };
+
+const at = (value: Date) => new Date(value).toLocaleString("ar-IQ");
+
+function withRefusalContext(
+  message: string,
+  dispensedAt?: Date | null,
+  cooldownHours?: number
+): string {
+  if (!dispensedAt) return message;
+
+  const parts = [message, `تم التجهيز في ${at(dispensedAt)}`];
+
+  if (cooldownHours && cooldownHours > 0) {
+    const eligibleAgain = new Date(new Date(dispensedAt).getTime() + cooldownHours * 3_600_000);
+    parts.push(`يعود مؤهلاً في ${at(eligibleAgain)}`);
+  }
+
+  return parts.join(" · ");
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireApiPermission(request, "dispensing:confirm");
@@ -50,7 +70,16 @@ export async function POST(request: NextRequest) {
 
   if (!result.ok) {
     return NextResponse.json(
-      { error: refusalMessages[result.reason] ?? "تعذر إتمام الصرف.", reason: result.reason },
+      {
+        // The operator is standing in front of the citizen, so a refusal has to
+        // answer them: when the fuel went out, and when they may come back.
+        error: withRefusalContext(
+          refusalMessages[result.reason] ?? "تعذر إتمام الصرف.",
+          result.dispensedAt,
+          result.cooldownHours
+        ),
+        reason: result.reason
+      },
       { status: result.reason === "VEHICLE_NOT_FOUND" ? 404 : 409 }
     );
   }
