@@ -180,7 +180,7 @@ export function PilotDashboard({ role }: { role: PilotRole }) {
       if (!response.ok) throw new Error(result.error);
       setNotice(
         result.station
-          ? "تمت إضافة المحطة."
+          ? `تمت إضافة محطة ${result.station.nameAr}. يدخل مديرها من /pilot/station باسم ${result.manager?.login ?? ""}.`
           : result.employee
             ? `تمت إضافة الموظف ${result.employee.name}. يدخل من /pilot/employee برقم هاتفه.`
             : `تم إنشاء قاعدة الأزمة وتخصيص ${result.allocation?.allocated ?? 0} مركبة.`

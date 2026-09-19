@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { loginIdentifier } from "@/lib/validation/login";
 
 const stationStatuses = [
   "NORMAL",
@@ -33,7 +34,21 @@ export const createStationSchema = z
         })
       )
       .min(1)
-      .max(20)
+      .max(20),
+    /**
+     * The account that will run this station, created with it. Required, not
+     * optional: there is no other way to grant anyone access to a station, so a
+     * station created without one is a row nobody can ever open — and the
+     * manager is in turn the only person who can add the employees who scan at
+     * the gate.
+     */
+    manager: z
+      .object({
+        name: z.string().trim().min(2).max(120),
+        login: loginIdentifier,
+        password: z.string().min(8).max(256)
+      })
+      .strict()
   })
   .strict();
 

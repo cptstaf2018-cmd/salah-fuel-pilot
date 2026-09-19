@@ -13,10 +13,12 @@ type StationCreateDialogProps = {
 };
 
 /**
- * Creating a station also declares which fuels it carries and the level at
- * which each should warn. Both are required rather than optional: a station
- * with no inventory row cannot record a delivery, and a threshold of zero
- * leaves the stock bars permanently green no matter how low the tanks run.
+ * Creating a station also declares which fuels it carries, the level at which
+ * each should warn, and who runs it. All three are required rather than
+ * optional: a station with no inventory row cannot record a delivery, a
+ * threshold of zero leaves the stock bars permanently green no matter how low
+ * the tanks run, and a station with no manager account is a row nobody can
+ * open — the admin is the only one who can issue that account.
  */
 export function StationCreateDialog({
   open,
@@ -63,13 +65,18 @@ export function StationCreateDialog({
       fuelTypes: selectedFuels.map((fuelTypeId) => ({
         fuelTypeId,
         minimumThresholdLiters: Number(form.get(`threshold_${fuelTypeId}`) || 0)
-      }))
+      })),
+      manager: {
+        name: String(form.get("managerName")).trim(),
+        login: String(form.get("managerLogin")).trim(),
+        password: String(form.get("managerPassword"))
+      }
     });
 
     if (created) {
       setSelectedFuels(fuelTypes.map((fuel) => fuel.id));
     } else {
-      setError("تعذر إنشاء المحطة. تأكد أن رمز المحطة غير مستخدم.");
+      setError("تعذر إنشاء المحطة. تأكد أن رمز المحطة واسم دخول المدير غير مستخدمين.");
     }
   }
 
@@ -140,6 +147,40 @@ export function StationCreateDialog({
           <span>خط الطول — اختياري</span>
           <input name="longitude" type="number" step="0.000001" min="-180" max="180" placeholder="43.6" />
         </label>
+      </div>
+
+      <div className="field">
+        <span>حساب مدير المحطة — يدخل به من /pilot/station</span>
+        <div className="field-row">
+          <label className="field">
+            <span>اسم المدير</span>
+            <input name="managerName" required minLength={2} maxLength={120} placeholder="مثال: عمر الجبوري" />
+          </label>
+          <label className="field">
+            <span>اسم الدخول — بريد أو رقم هاتف</span>
+            <input
+              name="managerLogin"
+              required
+              minLength={3}
+              maxLength={120}
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              placeholder="مثال: 07701234567"
+            />
+          </label>
+          <label className="field">
+            <span>كلمة المرور — 8 خانات فأكثر</span>
+            <input
+              name="managerPassword"
+              type="password"
+              required
+              minLength={8}
+              maxLength={256}
+              autoComplete="new-password"
+            />
+          </label>
+        </div>
       </div>
 
       <div className="field">

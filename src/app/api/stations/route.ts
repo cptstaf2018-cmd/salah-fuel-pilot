@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { requireApiPermission } from "@/lib/api";
+import { hashPassword } from "@/lib/auth/password";
+import { toLoginIdentity } from "@/lib/validation/login";
 import { createStationSchema } from "@/lib/validation/stations";
 
 export async function GET(request: NextRequest) {
@@ -47,7 +49,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "بيانات المحطة غير صحيحة." }, { status: 400 });
   }
 
-  const { fuelTypes, ...stationData } = body.data;
+  const { fuelTypes, manager, ...stationData } = body.data;
+  const identity = toLoginIdentity(manager.login);
+  // Hashed outside the transaction: argon2 is tuned to take tens of
+  // milliseconds, and the database is held to a single pooled connection.
+  const passwordHash = await hashPassword(manager.password);
 
   try {
     // The inventory rows are created with the station, not later: the receipt
@@ -65,6 +71,21 @@ export async function POST(request: NextRequest) {
         }))
       });
 
+      // The manager comes with the station, in the same transaction. A station
+      // that failed to get one would be invisible to everybody: nothing else
+      // grants access to a station, and no screen exists to attach an account
+      // to one afterwards.
+      const managerUser = await tx.user.create({
+        data: {
+          name: manager.name,
+          ...identity,
+          passwordHash,
+          role: "STATION_MANAGER"
+        }
+      });
+
+      await tx.stationUser.create({ data: { stationId: created.id, userId: managerUser.id } });
+
       return tx.station.findUniqueOrThrow({
         where: { id: created.id },
         include: { fuelInventory: { include: { fuelType: true } } }
@@ -79,13 +100,34 @@ export async function POST(request: NextRequest) {
       outcome: "SUCCESS",
       ipAddress: request.headers.get("x-forwarded-for"),
       userAgent: request.headers.get("user-agent"),
-      metadata: { code: station.code, nameAr: station.nameAr, fuelTypes: fuelTypes.length }
+      // The manager's login is recorded so the audit trail shows who was given
+      // the station; the password is not, here or anywhere else.
+      metadata: {
+        code: station.code,
+        nameAr: station.nameAr,
+        fuelTypes: fuelTypes.length,
+        managerLogin: manager.login
+      }
     });
 
-    return NextResponse.json({ station }, { status: 201 });
+    return NextResponse.json(
+      { station, manager: { name: manager.name, login: manager.login } },
+      { status: 201 }
+    );
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return NextResponse.json({ error: "رمز المحطة مستخدم لمحطة أخرى." }, { status: 409 });
+      // The same code covers two different collisions here — the station's code
+      // and the manager's login — and telling the admin which one to change is
+      // the difference between a fixable form and a dead end.
+      const conflict = String(error.meta?.target ?? "");
+      return NextResponse.json(
+        {
+          error: conflict.includes("code")
+            ? "رمز المحطة مستخدم لمحطة أخرى."
+            : "اسم دخول المدير مستخدم لحساب آخر."
+        },
+        { status: 409 }
+      );
     }
     throw error;
   }
