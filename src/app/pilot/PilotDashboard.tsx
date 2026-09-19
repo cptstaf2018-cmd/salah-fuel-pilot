@@ -64,6 +64,13 @@ export function PilotDashboard({ role }: { role: PilotRole }) {
   const [busy, setBusy] = useState(false);
   const [stationId, setStationId] = useState("");
   const [vehiclesPage, setVehiclesPage] = useState(1);
+  // One page size per list, so a long audit log can be opened wide without
+  // dragging the citizen table to fifty rows on the same screen.
+  const [vehiclesPageSize, setVehiclesPageSize] = useState(20);
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const [transactionsPageSize, setTransactionsPageSize] = useState(20);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsPageSize, setLogsPageSize] = useState(20);
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [vehicleFuel, setVehicleFuel] = useState("");
   const [vehicleStatus, setVehicleStatus] = useState("");
@@ -74,7 +81,11 @@ export function PilotDashboard({ role }: { role: PilotRole }) {
     try {
       const query = new URLSearchParams({
         vehiclesPage: String(vehiclesPage),
-        vehiclesPageSize: "50",
+        vehiclesPageSize: String(vehiclesPageSize),
+        transactionsPage: String(transactionsPage),
+        transactionsPageSize: String(transactionsPageSize),
+        logsPage: String(logsPage),
+        logsPageSize: String(logsPageSize),
         vehicleSearch,
         vehicleFuel,
         vehicleStatus
@@ -98,7 +109,19 @@ export function PilotDashboard({ role }: { role: PilotRole }) {
     } catch {
       setError("تعذر تحديث البيانات. تحقق من الاتصال ثم أعد المحاولة.");
     }
-  }, [role, expectedRole, vehiclesPage, vehicleSearch, vehicleFuel, vehicleStatus]);
+  }, [
+    role,
+    expectedRole,
+    vehiclesPage,
+    vehiclesPageSize,
+    transactionsPage,
+    transactionsPageSize,
+    logsPage,
+    logsPageSize,
+    vehicleSearch,
+    vehicleFuel,
+    vehicleStatus
+  ]);
 
   useEffect(() => {
     void load();
@@ -355,6 +378,24 @@ export function PilotDashboard({ role }: { role: PilotRole }) {
             onVehiclesPage={(direction) =>
               setVehiclesPage((page) => Math.max(1, page + direction))
             }
+            // Changing the page size returns to page one: staying on page four
+            // of fifty lands past the end of the same list shown twenty at a time.
+            onVehiclesPageSize={(size) => {
+              setVehiclesPageSize(size);
+              setVehiclesPage(1);
+            }}
+            onTransactionsPage={(direction) =>
+              setTransactionsPage((page) => Math.max(1, page + direction))
+            }
+            onTransactionsPageSize={(size) => {
+              setTransactionsPageSize(size);
+              setTransactionsPage(1);
+            }}
+            onLogsPage={(direction) => setLogsPage((page) => Math.max(1, page + direction))}
+            onLogsPageSize={(size) => {
+              setLogsPageSize(size);
+              setLogsPage(1);
+            }}
             onCommand={command}
             onCreate={create}
             onMutate={mutate}

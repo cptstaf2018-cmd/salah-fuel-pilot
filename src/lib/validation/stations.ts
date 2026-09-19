@@ -84,3 +84,10 @@ export const manualInventoryAdjustmentSchema = z
     reason: z.string().trim().min(10).max(500)
   })
   .strict();
+
+/** Only the reason is editable on a recorded movement — see the route for why. */
+export const updateInventoryTransactionSchema = z
+  .object({
+    reason: z.string().trim().min(3).max(500)
+  })
+  .strict();

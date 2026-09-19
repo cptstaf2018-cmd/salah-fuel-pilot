@@ -1235,3 +1235,56 @@ tr:focus-within .row-actions {
   font-size: var(--text-xs);
   font-weight: 500;
 }
+
+/* ========================================================================== */
+/* Pager                                                                      */
+/* ========================================================================== */
+
+/* Sits under a table as its footer rather than floating below it, so a long
+   list reads as one object: rows, then how far through them you are. */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s3) var(--s5);
+  border-block-start: 1px solid var(--line);
+  background: var(--surface-sunken);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.pager-count {
+  min-width: 0;
+}
+
+.pager-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.pager-size select {
+  min-height: 30px;
+  padding-inline: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pushed to the far end, so the two navigation buttons always sit in the same
+   place whatever the row count above them says. */
+.pager-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-inline-start: auto;
+}
+
+.pager-page {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}

@@ -1,3 +1,5 @@
+import type { PageMeta } from "@/components/console/Pager";
+
 export type DashboardStation = {
   id: string;
   code: string;
@@ -54,6 +56,19 @@ export function describeCitizen(vehicle: DashboardVehicle): {
   return { label: "بانتظار التخصيص", state: "warn", servedAt: null };
 }
 
+export type DashboardTransaction = {
+  id: string;
+  createdAt: string;
+  /** DISPENSING movements cannot be deleted on their own — see the route. */
+  type: string;
+  station: { nameAr: string };
+  fuelType: { nameAr: string };
+  quantityChange: string;
+  quantityAfter: string;
+  reason: string;
+  actor: { name: string };
+};
+
 export type DashboardCrisisRule = {
   id: string;
   name: string;
@@ -93,19 +108,11 @@ export type DashboardFuelType = {
 export type Dashboard = {
   user: { name: string; role: string };
   stations: DashboardStation[];
-  transactions: {
-    id: string;
-    createdAt: string;
-    type: string;
-    station: { nameAr: string };
-    fuelType: { nameAr: string };
-    quantityChange: string;
-    quantityAfter: string;
-    reason: string;
-    actor: { name: string };
-  }[];
+  transactions: DashboardTransaction[];
   vehicles: DashboardVehicle[];
-  vehiclesPage: { page: number; pageSize: number; total: number; totalPages: number };
+  vehiclesPage: PageMeta;
+  transactionsPage: PageMeta;
+  logsPage: PageMeta;
   vehicleSummary: {
     byFuel: { fuelTypeId: string; fuelName: string; count: number }[];
     byStatus: { status: string; count: number }[];
@@ -162,6 +169,10 @@ export const auditLabels: Record<string, string> = {
   MANUAL_INVENTORY_ADJUSTMENT: "تعديل مخزون يدوي",
   NATIONAL_ID_UPLOADED: "رفع بطاقة وطنية",
   PERMISSION_DENIED: "رفض صلاحية",
+  STATION_CREATED: "إضافة محطة",
+  INVENTORY_MOVEMENT_UPDATED: "تعديل حركة مخزون",
+  INVENTORY_MOVEMENT_DELETED: "حذف حركة مخزون",
+  AUDIT_LOG_DELETED: "حذف سجل رقابة",
   STATION_EMPLOYEE_CREATED: "إضافة موظف محطة",
   STATION_EMPLOYEE_UPDATED: "تعديل موظف محطة",
   STATION_EMPLOYEE_RETIRED: "إيقاف موظف محطة",

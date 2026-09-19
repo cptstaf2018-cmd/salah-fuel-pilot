@@ -3,6 +3,22 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth/current-user";
 import { AppointmentStatus, VehicleRegistrationStatus } from "@prisma/client";
 
+/**
+ * Pulls a requested page back into range once the total is known. Deleting the
+ * last row on the last page would otherwise leave the operator on a page that
+ * no longer exists, staring at an empty table with no way back but the pager.
+ */
+const clampPage = (page: number, pageSize: number, total: number) =>
+  Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
+
+/** The shape every paged list reports back, so one pager component serves all. */
+const pageMeta = (page: number, pageSize: number, total: number) => ({
+  page,
+  pageSize,
+  total,
+  totalPages: Math.max(1, Math.ceil(total / pageSize))
+});
+
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser(request);
   // Station employees reach the same endpoint from their phones: the station
@@ -10,11 +26,20 @@ export async function GET(request: NextRequest) {
   // blocks stay empty for them.
   if (!user || !["SUPER_ADMIN", "STATION_MANAGER", "STATION_EMPLOYEE"].includes(user.role)) return NextResponse.json({ error: "سجل الدخول بحساب الإدارة أو المحطة." }, { status: 401 });
   const admin = user.role === "SUPER_ADMIN";
-  const vehiclesPage = Math.max(1, Number(request.nextUrl.searchParams.get("vehiclesPage") || 1));
-  const vehiclesPageSize = Math.min(100, Math.max(10, Number(request.nextUrl.searchParams.get("vehiclesPageSize") || 50)));
   const vehicleSearch = request.nextUrl.searchParams.get("vehicleSearch")?.trim() || "";
   const vehicleFuel = request.nextUrl.searchParams.get("vehicleFuel") || "";
   const vehicleStatus = request.nextUrl.searchParams.get("vehicleStatus") || "";
+  // Every list is paged. The console used to fetch fifty movements and thirty
+  // log lines and render the first twelve of each, so the rest were fetched and
+  // thrown away, and nothing past them could be reached at all.
+  const page = (name: string) => Math.max(1, Number(request.nextUrl.searchParams.get(name) || 1));
+  const pageSize = (name: string) => Math.min(50, Math.max(20, Number(request.nextUrl.searchParams.get(name) || 20)));
+  const transactionsPage = page("transactionsPage");
+  const transactionsPageSize = pageSize("transactionsPageSize");
+  const logsPage = page("logsPage");
+  const logsPageSize = pageSize("logsPageSize");
+  const vehiclesPage = page("vehiclesPage");
+  const vehiclesPageSize = pageSize("vehiclesPageSize");
   const stations = await prisma.station.findMany({ where: admin ? {} : { stationUsers: { some: { userId: user.id } } }, include: { fuelInventory: { include: { fuelType: true } } }, orderBy: { code: "asc" } });
   const stationIds = stations.map((station) => station.id);
   // Two of the filter values describe where a citizen is in the handover cycle
@@ -59,12 +84,18 @@ export async function GET(request: NextRequest) {
   // queries through Promise.all made them contend for that single connection
   // until Prisma gave up with P2024 — the dashboard's "تعذر تحديث البيانات".
   // With one connection there is nothing to win by running them concurrently.
-  const transactions = await prisma.inventoryTransaction.findMany({ where: { stationId: { in: stationIds } }, include: { station: true, fuelType: true, actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 50 });
-  const vehicles = admin ? await prisma.vehicle.findMany({ where: vehicleWhere, include: { owner: true, fuelType: true, appointments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, dispensedAt: true, dispensedLiters: true, station: { select: { nameAr: true } } } } }, orderBy: { createdAt: "desc" }, skip: (vehiclesPage - 1) * vehiclesPageSize, take: vehiclesPageSize }) : [];
+  const transactionWhere = { stationId: { in: stationIds } };
+  const transactionsTotal = await prisma.inventoryTransaction.count({ where: transactionWhere });
+  const transactionsAt = clampPage(transactionsPage, transactionsPageSize, transactionsTotal);
+  const transactions = await prisma.inventoryTransaction.findMany({ where: transactionWhere, include: { station: true, fuelType: true, actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, skip: (transactionsAt - 1) * transactionsPageSize, take: transactionsPageSize });
   const vehiclesTotal = admin ? await prisma.vehicle.count({ where: vehicleWhere }) : 0;
+  const vehiclesAt = clampPage(vehiclesPage, vehiclesPageSize, vehiclesTotal);
+  const vehicles = admin ? await prisma.vehicle.findMany({ where: vehicleWhere, include: { owner: true, fuelType: true, appointments: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, dispensedAt: true, dispensedLiters: true, station: { select: { nameAr: true } } } } }, orderBy: { createdAt: "desc" }, skip: (vehiclesAt - 1) * vehiclesPageSize, take: vehiclesPageSize }) : [];
   const vehicleFuelSummary = admin ? await prisma.vehicle.groupBy({ by: ["fuelTypeId"], _count: { _all: true } }) : [];
   const vehicleStatusSummary = admin ? await prisma.vehicle.groupBy({ by: ["registrationStatus"], _count: { _all: true } }) : [];
-  const logs = admin ? await prisma.auditLog.findMany({ include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 30 }) : [];
+  const logsTotal = admin ? await prisma.auditLog.count() : 0;
+  const logsAt = clampPage(logsPage, logsPageSize, logsTotal);
+  const logs = admin ? await prisma.auditLog.findMany({ include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, skip: (logsAt - 1) * logsPageSize, take: logsPageSize }) : [];
   const governorates = admin ? await prisma.governorate.findMany({ include: { districts: { orderBy: { nameAr: "asc" } } }, orderBy: { nameAr: "asc" } }) : [];
   const fuelTypes = admin ? await prisma.fuelType.findMany({ where: { isActive: true }, orderBy: { nameAr: "asc" } }) : [];
   const crisisRules = await prisma.crisisRule.findMany({ where: { status: { in: ["ACTIVE", "PAUSED"] } }, include: { fuelType: { select: { nameAr: true } }, _count: { select: { stations: true, allocations: true } } }, orderBy: { createdAt: "desc" } });
@@ -80,12 +111,14 @@ export async function GET(request: NextRequest) {
     stations,
     transactions,
     vehicles,
-    vehiclesPage: { page: vehiclesPage, pageSize: vehiclesPageSize, total: vehiclesTotal, totalPages: Math.max(1, Math.ceil(vehiclesTotal / vehiclesPageSize)) },
+    vehiclesPage: pageMeta(vehiclesAt, vehiclesPageSize, vehiclesTotal),
     vehicleSummary: {
       byFuel: vehicleFuelSummary.map((item) => ({ fuelTypeId: item.fuelTypeId, fuelName: fuelNames.get(item.fuelTypeId) || "غير معروف", count: item._count._all })),
       byStatus: vehicleStatusSummary.map((item) => ({ status: item.registrationStatus, count: item._count._all }))
     },
+    transactionsPage: pageMeta(transactionsAt, transactionsPageSize, transactionsTotal),
     logs,
+    logsPage: pageMeta(logsAt, logsPageSize, logsTotal),
     governorates,
     fuelTypes,
     crisisRules,

@@ -1,6 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { Kpi } from "@/components/console/Kpi";
+import { Pager } from "@/components/console/Pager";
 import { StationStrip, type StationRow } from "@/components/console/StationStrip";
 import { ConfirmDialog, type ConfirmRequest } from "@/components/ui/ConfirmDialog";
 import { EditDialog } from "@/components/ui/EditDialog";
@@ -15,6 +16,7 @@ import {
   registrationLabels,
   type Dashboard,
   type DashboardStation,
+  type DashboardTransaction,
   type DashboardVehicle
 } from "./types";
 
@@ -28,6 +30,11 @@ type AdminConsoleProps = {
   onVehicleFuel: (value: string) => void;
   onVehicleStatus: (value: string) => void;
   onVehiclesPage: (direction: -1 | 1) => void;
+  onVehiclesPageSize: (size: number) => void;
+  onTransactionsPage: (direction: -1 | 1) => void;
+  onTransactionsPageSize: (size: number) => void;
+  onLogsPage: (direction: -1 | 1) => void;
+  onLogsPageSize: (size: number) => void;
   onCommand: (path: string) => Promise<void>;
   onCreate: (url: string, body: unknown) => Promise<boolean>;
   onMutate: (url: string, method: "PATCH" | "DELETE", body?: unknown) => Promise<boolean>;
@@ -66,6 +73,7 @@ export function AdminConsole(props: AdminConsoleProps) {
   const [addingStation, setAddingStation] = useState(false);
   const [addingRule, setAddingRule] = useState(false);
   const [detailVehicleId, setDetailVehicleId] = useState<string | null>(null);
+  const [editingMovement, setEditingMovement] = useState<DashboardTransaction | null>(null);
 
   const totalLiters = data.stations.reduce(
     (sum, station) =>
@@ -84,6 +92,22 @@ export function AdminConsole(props: AdminConsoleProps) {
     data.vehiclesPage.page * data.vehiclesPage.pageSize,
     data.vehiclesPage.total
   );
+
+  async function saveMovementReason(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingMovement) return;
+    const form = new FormData(event.currentTarget);
+    setDialogError("");
+
+    const saved = await props.onMutate(
+      `/api/inventory/transactions/${editingMovement.id}`,
+      "PATCH",
+      { reason: String(form.get("reason")).trim() }
+    );
+
+    if (saved) setEditingMovement(null);
+    else setDialogError("تعذر حفظ التعديل. السبب لا يقل عن 3 خانات.");
+  }
 
   async function saveStation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -456,29 +480,12 @@ export function AdminConsole(props: AdminConsoleProps) {
           </div>
         )}
 
-        {data.vehiclesPage.totalPages > 1 && (
-          <div className="panel-body" style={{ display: "flex", gap: "var(--s3)", alignItems: "center" }}>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={data.vehiclesPage.page <= 1}
-              onClick={() => props.onVehiclesPage(-1)}
-            >
-              السابق
-            </button>
-            <span style={{ color: "var(--ink-faint)", fontSize: "var(--text-xs)" }}>
-              صفحة {formatCount(data.vehiclesPage.page)} / {formatCount(data.vehiclesPage.totalPages)}
-            </span>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={data.vehiclesPage.page >= data.vehiclesPage.totalPages}
-              onClick={() => props.onVehiclesPage(1)}
-            >
-              التالي
-            </button>
-          </div>
-        )}
+        <Pager
+          meta={data.vehiclesPage}
+          label="مركبات"
+          onPage={props.onVehiclesPage}
+          onPageSize={props.onVehiclesPageSize}
+        />
       </section>
 
       <section className="panel" id="movements">
@@ -499,10 +506,11 @@ export function AdminConsole(props: AdminConsoleProps) {
                 <th>الرصيد بعدها</th>
                 <th>بواسطة</th>
                 <th>السبب</th>
+                <th className="col-actions">إجراءات</th>
               </tr>
             </thead>
             <tbody>
-              {data.transactions.slice(0, 12).map((item) => {
+              {data.transactions.map((item) => {
                 const change = Number(item.quantityChange);
                 return (
                   <tr key={item.id}>
@@ -516,12 +524,52 @@ export function AdminConsole(props: AdminConsoleProps) {
                     <td className="num">{formatLiters(item.quantityAfter)}</td>
                     <td>{item.actor.name}</td>
                     <td>{item.reason}</td>
+                    <td className="col-actions">
+                      <span className="row-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={busy}
+                          onClick={() => setEditingMovement(item)}
+                        >
+                          تعديل
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger"
+                          disabled={busy}
+                          onClick={() =>
+                            setConfirm({
+                              title: "حذف حركة المخزون",
+                              body:
+                                item.type === "DISPENSING"
+                                  ? "هذه حركة صرف مرتبطة بموعد مواطن، ولا تُحذف وحدها."
+                                  : `سيرجع مخزون ${item.station.nameAr} بمقدار ${formatLiters(Math.abs(change))} لتر إلى ما كان عليه قبل هذه الحركة.`,
+                              confirmLabel: "حذف الحركة",
+                              danger: true,
+                              onConfirm: async () => {
+                                await props.onMutate(`/api/inventory/transactions/${item.id}`, "DELETE");
+                                setConfirm(null);
+                              }
+                            })
+                          }
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        <Pager
+          meta={data.transactionsPage}
+          label="حركات"
+          onPage={props.onTransactionsPage}
+          onPageSize={props.onTransactionsPageSize}
+        />
       </section>
 
       <section className="panel" id="audit">
@@ -539,10 +587,11 @@ export function AdminConsole(props: AdminConsoleProps) {
                 <th>المستخدم</th>
                 <th>الإجراء</th>
                 <th>النتيجة</th>
+                <th className="col-actions">إجراءات</th>
               </tr>
             </thead>
             <tbody>
-              {data.logs.slice(0, 12).map((log) => (
+              {data.logs.map((log) => (
                 <tr key={log.id}>
                   <td>{new Date(log.createdAt).toLocaleString("ar-IQ")}</td>
                   <td>{log.actor?.name ?? "تسجيل مواطن"}</td>
@@ -552,11 +601,41 @@ export function AdminConsole(props: AdminConsoleProps) {
                       {log.outcome === "SUCCESS" ? "ناجح" : "مرفوض"}
                     </Pill>
                   </td>
+                  <td className="col-actions">
+                    {/* No edit button beside it: an audit line that can be
+                        rewritten records nothing. It can be removed, and the
+                        removal is itself recorded. */}
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      disabled={busy}
+                      onClick={() =>
+                        setConfirm({
+                          title: "حذف سجل رقابة",
+                          body: `سيُحذف «${auditLabels[log.action] ?? log.action}» نهائياً، وسيُسجَّل أنك حذفته.`,
+                          confirmLabel: "حذف السجل",
+                          danger: true,
+                          onConfirm: async () => {
+                            await props.onMutate(`/api/audit-logs/${log.id}`, "DELETE");
+                            setConfirm(null);
+                          }
+                        })
+                      }
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <Pager
+          meta={data.logsPage}
+          label="سجلات"
+          onPage={props.onLogsPage}
+          onPageSize={props.onLogsPageSize}
+        />
       </section>
 
       <StationCreateDialog
@@ -618,6 +697,29 @@ export function AdminConsole(props: AdminConsoleProps) {
             ))}
           </select>
         </label>
+      </EditDialog>
+
+      <EditDialog
+        open={Boolean(editingMovement)}
+        title="تعديل سبب الحركة"
+        busy={busy}
+        error={dialogError}
+        onSubmit={saveMovementReason}
+        onDismiss={() => setEditingMovement(null)}
+      >
+        <label className="field">
+          <span>السبب أو رقم الوصل</span>
+          <input
+            name="reason"
+            defaultValue={editingMovement?.reason ?? ""}
+            required
+            minLength={3}
+            maxLength={500}
+          />
+        </label>
+        <p className="form-note">
+          الكميات لا تُعدَّل من هنا — هي السجل نفسه. لتصحيح كمية، احذف الحركة وسجّلها من جديد.
+        </p>
       </EditDialog>
 
       <EditDialog
